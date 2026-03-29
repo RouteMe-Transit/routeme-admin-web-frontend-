@@ -1,31 +1,31 @@
-import React from "react";
 
-interface Props {
+
+type Props = {
   label: string;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   active?: boolean;
-  badge?: number;
-}
-
-const SidebarItem = ({ label, icon, active, badge }: Props) => {
-  return (
-    <div
-      className={`flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-[#1a3a5a] ${
-        active ? "bg-[#1a3a5a] text-[#50b18d]" : "text-gray-300"
-      }`}
-    >
-      <div className="flex items-center gap-4">
-        <span className="text-lg">{icon}</span>
-        <span className="font-medium">{label}</span>
-      </div>
-
-      {badge && (
-        <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-          {badge}
-        </span>
-      )}
-    </div>
-  );
+  onClick?: () => void;
 };
 
-export default SidebarItem;
+export default function SidebarItem({
+  label,
+  icon,
+  active,
+  onClick,
+}: Props) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-3 px-4 py-3 w-full text-left rounded-md transition
+        ${
+          active
+            ? "bg-green-600 text-white"
+            : "text-gray-300 hover:bg-gray-700"
+        }
+      `}
+    >
+      <div className="text-xl">{icon}</div>
+      <span className="font-semibold text-lg">{label}</span>
+    </button>
+  );
+}
