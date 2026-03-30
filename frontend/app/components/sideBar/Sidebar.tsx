@@ -53,17 +53,20 @@ const menus = {
 
 type Props = {
   role: "passenger" | "admin" | "bus";
+  gpsEnabled?: boolean;
+  onGpsToggle?: (enabled: boolean) => void;
 };
 
-export default function Sidebar({ role }: Props) {
+export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [localGpsEnabled, setLocalGpsEnabled] = useState(false);
+  const isGpsEnabled = gpsEnabled ?? localGpsEnabled;
 
   const items = menus[role] as MenuItem[];
 
   return (
-    <div className="w-[385px] h-screen bg-[#122843] text-white flex flex-col">
+    <div className="w-[385px] h-screen bg-[#122843] text-white flex flex-col sticky top-0 z-20">
       <LogoNname/>
 
       <div className="border-t border-gray-700" />
@@ -87,15 +90,19 @@ export default function Sidebar({ role }: Props) {
         <div className="mt-auto p-4 border-t border-gray-600">
           {role === "bus" ? (
             <button
-              onClick={() => setGpsEnabled(!gpsEnabled)}
+              onClick={() => {
+                const nextValue = !isGpsEnabled;
+                setLocalGpsEnabled(nextValue);
+                onGpsToggle?.(nextValue);
+              }}
               className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-md font-semibold transition ${
-                gpsEnabled
+                isGpsEnabled
                   ? "bg-[#4CAF8A] text-white"
                   : "text-gray-300 hover:bg-gray-600 border border-white"
               }`}
             >
               <FaPowerOff className="text-lg" />
-              {gpsEnabled ? "GPS ON" : "GPS OFF"}
+              {isGpsEnabled ? "GPS ON" : "GPS OFF"}
             </button>
           ) : (
             <button
