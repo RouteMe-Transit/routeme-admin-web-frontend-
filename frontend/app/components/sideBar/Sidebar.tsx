@@ -41,7 +41,7 @@ const menus = {
     { id: "feedback", label: "Feedback", icon: <FaCommentDots /> },
   ],
 
-  driver: [
+  bus: [
     { id: "trip", label: "Trip", icon: <FaRoute /> },
     { id: "alerts", label: "Alerts", icon: <FaBell /> },
     { id: "reports", label: "Reports", icon: <FaClipboardList /> },
@@ -50,7 +50,7 @@ const menus = {
 };
 
 type Props = {
-  role: "passenger" | "admin" | "driver";
+  role: "passenger" | "admin" | "bus";
 };
 
 export default function Sidebar({ role }: Props) {
