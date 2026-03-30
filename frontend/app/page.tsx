@@ -1,7 +1,7 @@
 //landing page
 import Navbar from "@/app/components/navBar/NavbarData";
-import { FaCircle, FaMapPin, FaBell, FaPhone} from "react-icons/fa";
-import { FaMapLocationDot, FaLocationDot } from "react-icons/fa6";
+import { FaCircle, FaPhone} from "react-icons/fa";
+import { FaLocationDot } from "react-icons/fa6";
 import Link from "next/link";
 import LogoNname from "./components/logoNname/logoNname";
 
@@ -54,7 +54,7 @@ export default function Home() {
         <div className="w-full h-[323px] flex items-center justify-center gap-10 border">
 			<div className="bg-white w-[440px] h-[250px] rounded-[10px] border border-[#94A0AE]/30">
             <div className="ml-10 mt-10 gap-5 flex-col">
-              <FaMapPin className="text-red-500 text-5xl" /><br/>
+              <img src="/icons/gps.png" alt="Map" className="w-15 h-15" /><br/>
               <p className="text-3xl font-bold">Live GPS Tracking</p>
 			  
               <p className="text-[#94A0AE] text-lg mt-2">See every bus location<br/> updated every 10 seconds.</p>
@@ -62,7 +62,7 @@ export default function Home() {
 			</div>
 			<div className="bg-white w-[440px] h-[250px] rounded-[10px] border border-[#94A0AE]/30">
             <div className="ml-10 mt-10 gap-5 flex-col">
-              <FaBell className="text-yellow-500 text-5xl" /><br/>
+              <img src="/icons/fxemoji_bell.svg" alt="Map" className="w-15 h-15" /><br/>
               <p className="text-3xl font-bold">Smart Alerts</p>
 			  
               <p className="text-[#94A0AE] text-lg mt-2">Get notified instantly about delays and cancellations.</p>
@@ -70,7 +70,7 @@ export default function Home() {
 			</div>
 			<div className="bg-white w-[440px] h-[250px] rounded-[10px] border border-[#94A0AE]/30">
             <div className="ml-10 mt-10 gap-5 flex-col">
-              <FaMapLocationDot className="text-green-500 text-5xl" />
+              <img src="/icons/map1.svg" alt="Map" className="w-15 h-15" />
 			  <br/>
               <p className="text-3xl font-bold">Route Planner</p>
 			  
