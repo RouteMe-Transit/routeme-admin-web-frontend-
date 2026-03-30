@@ -2,50 +2,52 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import SidebarItem from "./SidebarItem";
+import LogoNname from "../logoNname/logoNname";
+import { FaPowerOff } from "react-icons/fa6";
 
-import {
-  FaMapMarkerAlt,
-  FaRoute,
-  FaNewspaper,
-  FaBell,
-  FaSearchLocation,
-  FaCommentDots,
-  FaTachometerAlt,
-  FaBus,
-  FaUsers,
-  FaExclamationTriangle,
-  FaClipboardList,
-} from "react-icons/fa";
+type MenuItem = {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  path?: string;
+};
+
 
 const menus = {
   passenger: [
-    { id: "live", label: "Live Tracking", icon: <FaMapMarkerAlt /> },
-    { id: "route", label: "Route Finder", icon: <FaRoute /> },
-    { id: "news", label: "News Feed", icon: <FaNewspaper /> },
-    { id: "alerts", label: "Alerts", icon: <FaBell /> },
-    { id: "lost", label: "Lost & Found", icon: <FaSearchLocation /> },
-    { id: "complaints", label: "Complaints", icon: <FaExclamationTriangle /> },
-    { id: "feedback", label: "Feedback", icon: <FaCommentDots /> },
+    { id: "live", label: "Live Tracking", icon: <img src="/icons/liveTracking.png" alt="Live Tracking" className="h-7 w-7 object-contain" />, path: "/passenger/liveTracking" },
+    { id: "route", label: "Route Finder", icon: <img src="/icons/map.png" alt="Route Finder" className="h-7 w-7 object-contain" />, path: "/passenger/routeFinder" },
+    { id: "news", label: "News Feed", icon: <img src="/icons/NewsPaper.png" alt="News Feed" className="h-7 w-7 object-contain" />, path: "/passenger/newsFeed" },
+    { id: "alerts", label: "Alerts", icon: <img src="/icons/alarm.png" alt="Alarm" className="h-7 w-7 object-contain" />, path: "/passenger/alerts" },
+    { id: "lost", label: "Lost & Found", icon: <img src="/icons/lostFound.png" alt="Search Location" className="h-7 w-7 object-contain" />, path: "/passenger/lost&found" },
+    { id: "complaints", label: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaint" className="h-7 w-7 object-contain" />, path: "/passenger/complaint" },
+    { id: "feedback", label: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="h-7 w-7 object-contain" />, path: "/passenger/feedback" },
   ],
 
   admin: [
-    { id: "dashboard", label: "Dashboard", icon: <FaTachometerAlt /> },
-    { id: "fleet", label: "Fleet Monitor", icon: <FaBus /> },
-    { id: "routes", label: "Manage Routes", icon: <FaRoute /> },
-    { id: "buses", label: "Manage Buses", icon: <FaBus /> },
-    { id: "news", label: "Publish News", icon: <FaNewspaper /> },
-    { id: "alerts", label: "Send Alert", icon: <FaBell /> },
-    { id: "users", label: "Users", icon: <FaUsers /> },
-    { id: "complaints", label: "Complaints", icon: <FaExclamationTriangle /> },
-    { id: "feedback", label: "Feedback", icon: <FaCommentDots /> },
+    { id: "dashboard", label: "Dashboard", icon: <img src="/icons/dashboard.png" alt="Dashboard" className="h-7 w-7 object-contain" />, path: "/admin/dashboard" },
+    { id: "fleet", label: "Fleet Monitor", icon: <img src="/icons/map.png" alt="Fleet Monitoring" className="h-7 w-7 object-contain" />, path: "/admin/fleetMonitor" },
+    { id: "routes", label: "Manage Routes", icon: <img src="/icons/manageRoutes.png" alt="Route" className="h-7 w-7 object-contain" />, path: "/admin/manageRoutes" },
+    { id: "buses", label: "Manage Buses", icon: <img src="/icons/bus.png" alt="Bus" className="h-7 w-7 object-contain" />, path: "/admin/manageBuses" },
+    { id: "news", label: "Publish News", icon: <img src="/icons/newspaper.png" alt="News" className="h-7 w-7 object-contain" />, path: "/admin/publishNews" },
+    {
+      id: "alerts",
+      label: "Send Alert",
+      icon: <img src="/icons/alarm.png" alt="Alarm" className="h-7 w-7 object-contain" />,
+      path: "/admin/alerts",
+    },
+    { id: "users", label: "Users", icon: <img src="/icons/users.png" alt="Users" className="h-7 w-7 object-contain" />, path: "/admin/users" },
+    { id: "complaints", label: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaint" className="h-7 w-7 object-contain" />, path: "/admin/complaints" },
+    { id: "feedback", label: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="h-7 w-7 object-contain" />, path: "/admin/feedback" },
   ],
 
   bus: [
-    { id: "trip", label: "Trip", icon: <FaRoute /> },
-    { id: "alerts", label: "Alerts", icon: <FaBell /> },
-    { id: "reports", label: "Reports", icon: <FaClipboardList /> },
-    { id: "bus", label: "Bus", icon: <FaBus /> },
+    { id: "trip", label: "Trip", icon: <img src="/icons/trip.png" alt="Trip" className="h-7 w-7 object-contain" />, path: "/bus/trip" },
+    { id: "alerts", label: "Alerts", icon: <img src="/icons/alarm.png" alt="Alarm" className="h-7 w-7 object-contain" />, path: "/bus/alerts" },
+    { id: "reports", label: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="h-7 w-7 object-contain" />, path: "/bus/reports" },
+    { id: "bus", label: "Bus", icon: <img src="/icons/bus.png" alt="Bus" className="h-7 w-7 object-contain" />, path: "/bus/profile" },
   ],
 };
 
@@ -54,42 +56,63 @@ type Props = {
 };
 
 export default function Sidebar({ role }: Props) {
-  const [active, setActive] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const [gpsEnabled, setGpsEnabled] = useState(false);
 
-  const items = menus[role];
+  const items = menus[role] as MenuItem[];
 
   return (
-    <div className="w-64 h-screen bg-[#122843] text-white flex flex-col">
-      {/* Logo */}
-      <div className="p-6 text-2xl font-bold">
-        Route<span className="text-green-400">Me</span>
-      </div>
+    <div className="w-[385px] h-screen bg-[#122843] text-white flex flex-col">
+      <LogoNname/>
 
-      <div className="border-t border-gray-600" />
+      <div className="border-t border-gray-700" />
 
-      {/* Menu */}
-      <div className="flex flex-col mt-4 space-y-2 px-2">
-        {items.map((item) => (
-          <SidebarItem
-            key={item.id}
-            label={item.label}
-            icon={item.icon}
-            active={active === item.id}
-            onClick={() => setActive(item.id)}
-          />
-        ))}
-      </div>
-
-      {/* Footer */}
-      <div className="mt-auto p-4 border-t border-gray-600">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-500 rounded-full" />
-          <div>
-            <p className="font-semibold">User Name</p>
-            <p className="text-sm text-gray-400 capitalize">{role}</p>
-          </div>
+        {/* Menu */}
+        <div className="flex flex-col mt-7 space-y-2 px-2">
+          {items.map((item) => (
+            <SidebarItem
+              key={item.id}
+              label={item.label}
+              icon={item.icon}
+              active={item.path ? pathname === item.path : false}
+              onClick={() => {
+                if (item.path) router.push(item.path);
+              }}
+            />
+          ))}
         </div>
-      </div>
+
+        {/* Footer */}
+        <div className="mt-auto p-4 border-t border-gray-600">
+          {role === "bus" ? (
+            <button
+              onClick={() => setGpsEnabled(!gpsEnabled)}
+              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-md font-semibold transition ${
+                gpsEnabled
+                  ? "bg-[#4CAF8A] text-white"
+                  : "text-gray-300 hover:bg-gray-600 border border-white"
+              }`}
+            >
+              <FaPowerOff className="text-lg" />
+              {gpsEnabled ? "GPS ON" : "GPS OFF"}
+            </button>
+          ) : (
+            <button
+                onClick={() => {
+                  if (role === "passenger") router.push("/passenger/profile");
+                  else if (role === "admin") router.push("/admin/profile");
+                }}
+                className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-gray-700 transition"
+              >
+                <img src="/profile-placeholder.png" alt="Profile" className="w-10 h-10 rounded-full object-cover mr-4" />
+                <div className="text-left">
+                  <p className="font-semibold">User Name</p>
+                  <p className="text-sm text-gray-400 capitalize">{role}</p>
+                </div>
+            </button>
+          )}
+        </div>
     </div>
   );
 }
