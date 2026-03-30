@@ -5,13 +5,13 @@ type NavItem = {
     path: string;
 };
 
-type NavBarItemsProps = {
+type NavbarItemsProps = {
     item: NavItem;
 };
 
-export default function NavBarItems({ item }: NavBarItemsProps) {
+export default function NavbarItems({ item }: NavbarItemsProps) {
     return (
-            <li className=" text-secondary text-base font-semibold hover:text-white">
+            <li className=" text-[#50B18D] text-base font-semibold hover:text-white">
                 <Link href={item.path}>{item.name}</Link>
             </li>
     )

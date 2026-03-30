@@ -1,15 +1,7 @@
 @import "tailwindcss";
 
-@theme {
-    --color-primary: #f5f4f1; /* off-white */
-    --color-secondary: #50B18D; /* light green */
-    --color-accent:#183555; /* dark blue */
-    --color-ashcolor: #94A0AE; /* ash color for texts*/
-    
-}
 
 body {
     background: #f5f4f1;
     color: #183555;
 }
-
