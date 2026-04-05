@@ -1,9 +1,12 @@
 // This file defines the alert types and their associated styles for the application. It includes a list of alert types, a mapping of alert types to their corresponding badge and card styles, and a mapping of alert types to their display labels.
 export const ALERT_TYPE_OPTIONS = [
 	{ value: "Service-Distruption", label: "Service Distruption" },
-	{ value: "Delay", label: "City-Wide Traffic Restrictions" },
-	{ value: "Accident", label: "Security Alerts" },
-	{ value: "Weather", label: "Flood-Prone Routes Warning" },
+	{ value: "Road-Block", label: "Road Block" },
+	{ value: "Delay", label: "Delay" },
+	{ value: "Accident", label: "Accident" },
+	{ value: "Breakdown", label: "Breakdown" },
+	{ value: "Weather", label: "Weather" },
+	{ value: "Not-Operating", label: "Not Operating" },
 	{ value: "Heavy-Rain", label: "Heavy Rain" },
 	{ value: "Damaged-Roads", label: "Damaged Roads" },
 	{ value: "Rule-Enforcement", label: "Rule Enforcement" },
@@ -21,6 +24,10 @@ export const ALERT_STYLE_MAP: Record<AlertTypeValue, { badgeClass: string; cardC
 		badgeClass: "border-red-300 bg-white text-red-700",
 		cardClass: "border-l-red-500 bg-white",
 	},
+	"Road-Block": {
+		badgeClass: "border-rose-300 bg-rose-100 text-rose-700",
+		cardClass: "border-l-rose-500 bg-white",
+	},
 	Delay: {
 		badgeClass: "border-orange-300 bg-orange-100 text-orange-700",
 		cardClass: "border-l-orange-500 bg-white",
@@ -29,9 +36,17 @@ export const ALERT_STYLE_MAP: Record<AlertTypeValue, { badgeClass: string; cardC
 		badgeClass: "border-amber-300 bg-amber-100 text-amber-800",
 		cardClass: "border-l-amber-500 bg-white",
 	},
+	Breakdown: {
+		badgeClass: "border-red-300 bg-red-100 text-red-700",
+		cardClass: "border-l-red-500 bg-white",
+	},
 	Weather: {
 		badgeClass: "border-blue-300 bg-blue-100 text-blue-700",
 		cardClass: "border-l-blue-500 bg-white",
+	},
+	"Not-Operating": {
+		badgeClass: "border-slate-300 bg-slate-200 text-slate-800",
+		cardClass: "border-l-slate-600 bg-white",
 	},
 	"Heavy-Rain": {
 		badgeClass: "border-cyan-300 bg-cyan-100 text-cyan-700",
