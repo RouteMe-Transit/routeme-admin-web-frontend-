@@ -13,6 +13,61 @@ export type PassengerAlert = {
 	isUnread: boolean;
 };
 
+export const BUS_ALERT_TYPES = [
+	"Delay",
+	"Weather",
+	"Breakdown",
+	"Not-Operating",
+	"Accident",
+	"Road-Block",
+] as const;
+
+export type BusAlertType = (typeof BUS_ALERT_TYPES)[number];
+
+const BUS_ALERT_TEMPLATE_MAP: Record<BusAlertType, { title: string; description: string }> = {
+	"Road-Block": {
+		title: "Road block on active route",
+		description: "A road block has been reported. The bus is using an alternate path where possible.",
+	},
+	Accident: {
+		title: "Accident reported ahead",
+		description: "An accident is affecting normal movement. Please expect temporary disruption.",
+	},
+	Breakdown: {
+		title: "Bus breakdown reported",
+		description: "The bus has a technical issue and operations are delayed until support arrives.",
+	},
+	Weather: {
+		title: "Weather alert on your route",
+		description: "Adverse weather is affecting bus movement. Please allow extra travel time.",
+	},
+	Delay: {
+		title: "Service delay notice",
+		description: "The current trip is delayed due to route conditions and traffic congestion.",
+	},
+	"Not-Operating": {
+		title: "Bus not operating",
+		description: "This bus is currently not operating. Please use the next available service.",
+	},
+};
+
+export function sendBusAlertToPassengers(type: BusAlertType, affectedRoute: string) {
+	const template = BUS_ALERT_TEMPLATE_MAP[type];
+	const nextId = passengerAlerts.length > 0 ? Math.max(...passengerAlerts.map((alert) => alert.id)) + 1 : 1;
+
+	passengerAlerts.unshift({
+		id: nextId,
+		type,
+		title: template.title,
+		description: template.description,
+		affectedRoute,
+		time: "Just now",
+		isUnread: true,
+	});
+
+	window.dispatchEvent(new Event(PASSENGER_ALERTS_CHANGED_EVENT));
+}
+
 export const passengerAlerts: PassengerAlert[] = [
 	{
 		id: 1,
