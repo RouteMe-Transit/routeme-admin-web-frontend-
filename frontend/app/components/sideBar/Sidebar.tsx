@@ -1,11 +1,15 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import SidebarItem from "./SidebarItem";
 import LogoNname from "../logoNname/logoNname";
 import { FaPowerOff } from "react-icons/fa6";
+import {
+  PASSENGER_ALERTS_CHANGED_EVENT,
+  getPassengerUnreadAlertCount,
+} from "@/config/passengerAlerts";
 
 type MenuItem = {
   id: string;
@@ -61,7 +65,27 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [localGpsEnabled, setLocalGpsEnabled] = useState(false);
+  const [unreadPassengerAlerts, setUnreadPassengerAlerts] = useState(() =>
+    role === "passenger" ? getPassengerUnreadAlertCount() : 0,
+  );
   const isGpsEnabled = gpsEnabled ?? localGpsEnabled;
+
+  useEffect(() => {
+    if (role !== "passenger") {
+      return;
+    }
+
+    const updateUnreadCount = () => {
+      setUnreadPassengerAlerts(getPassengerUnreadAlertCount());
+    };
+
+    updateUnreadCount();
+    window.addEventListener(PASSENGER_ALERTS_CHANGED_EVENT, updateUnreadCount);
+
+    return () => {
+      window.removeEventListener(PASSENGER_ALERTS_CHANGED_EVENT, updateUnreadCount);
+    };
+  }, [role]);
 
   const items = menus[role] as MenuItem[];
 
@@ -79,6 +103,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
               label={item.label}
               icon={item.icon}
               active={item.path ? pathname === item.path : false}
+              badgeCount={role === "passenger" && item.id === "alerts" && unreadPassengerAlerts > 0 ? unreadPassengerAlerts : undefined}
               onClick={() => {
                 if (item.path) router.push(item.path);
               }}
