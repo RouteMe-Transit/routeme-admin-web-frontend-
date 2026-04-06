@@ -200,7 +200,7 @@ export default function AdminAlertsPage() {
 					</div>
 				</div>
 				<div>
-					<p className="mt-3 text-sm font-medium text-gray-600">* If "Public Alert" is checked, the alert will be sent to all passengers. Otherwise, it will only be sent to passengers of the selected route.</p>
+					<p className="mt-3 text-sm font-medium text-gray-600">* If &quot;Public Alert&quot; is checked, the alert will be sent to all passengers. Otherwise, it will only be sent to passengers of the selected route.</p>
 				</div>
 				
 				<div className="mt-6 flex flex-wrap items-center justify-between gap-3">
