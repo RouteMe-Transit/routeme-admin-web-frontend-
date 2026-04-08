@@ -1,3 +1,6 @@
+/// Utility functions for handling Sri Lankan time formatting.
+///2026-04-08T10:00:00Z → 3.30PM (Sri Lankan time)
+
 const SRI_LANKA_TIMEZONE = "Asia/Colombo";
 
 type DateInput = Date | string | number;
