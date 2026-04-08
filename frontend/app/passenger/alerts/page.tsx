@@ -12,12 +12,15 @@ export default function PassengerAlertsPage() {
     const unreadCount = passengerAlerts.filter((alert) => alert.isUnread).length;
 
     return (
-        <section className="space-y-4">
+        <section className="space-y-4 p-6 ">
             {unreadCount > 0 && (
-                <span className="inline-block rounded-full bg-red-600 px-3 py-1 text-sm font-semibold text-white">
-                    {unreadCount} unread
-                </span>
+                <div className="flex justify-end">
+                    <span className="inline-block rounded-full bg-red-600 px-3 py-1 text-sm font-semibold text-white ">
+                        {unreadCount} unread
+                    </span>
+                </div>
             )}
+            
 
             <div className="space-y-3">
                 {passengerAlerts.map((alert) => {

@@ -9,7 +9,6 @@ import {
 	ALERT_TYPE_OPTIONS,
 	AlertTypeValue,
 } from "@/config/alertTypes";
-import { formatSriLankanTime } from "@/utils/sriLankanTime";
 
 type AlertHistoryStatus = "published" | "scheduled";
 
@@ -21,30 +20,10 @@ type AlertHistoryItem = {
 	targetAudience: string;
 	affectedRoute: string;
 	timestamp: string;
-	scheduleAt?: string;
+	scheduledAt?: string;
 };
 
-const initialAlertHistory: AlertHistoryItem[] = [
-	{
-		id: 1,
-		title: "Peak-hour congestion near Fort",
-		type: "Delay",
-		status: "published",
-		targetAudience: "101 Moratuwa - Pettah",
-		affectedRoute: "101 Moratuwa - Pettah",
-		timestamp: formatSriLankanTime(new Date("2026-04-04T03:45:00Z")),
-	},
-	{
-		id: 2,
-		title: "Flood warning around low-level roads",
-		type: "Weather",
-		status: "scheduled",
-		targetAudience: "100 Panadura - Pettah",
-		affectedRoute: "100 Panadura - Pettah",
-		timestamp: formatSriLankanTime(new Date("2026-04-04T06:10:00Z")),
-		scheduleAt: "2026-04-04T18:30",
-	},
-];
+const initialAlertHistory: AlertHistoryItem[] = [];
 
 export default function AdminAlertsPage() {
 	const [alertType, setAlertType] = useState<AlertTypeValue>("Service-Distruption");
@@ -67,7 +46,7 @@ export default function AdminAlertsPage() {
 	const selectedAlertLabel = ALERT_LABEL_MAP[alertType];
 	const getTargetAudience = () => (isPublicAlert ? "All Passengers" : targetRoute);
 
-	const addHistoryItem = (status: AlertHistoryStatus, scheduleValue?: string) => {
+	const addHistoryItem = (status: AlertHistoryStatus, scheduledAt?: string) => {
 		setAlertHistory((currentHistory) => [
 			{
 				id: Date.now(),
@@ -76,8 +55,8 @@ export default function AdminAlertsPage() {
 				status,
 				targetAudience: getTargetAudience(),
 				affectedRoute,
-				timestamp: formatSriLankanTime(new Date()),
-				scheduleAt: scheduleValue,
+				timestamp: new Date().toISOString(),
+				scheduledAt,
 			},
 			...currentHistory,
 		]);
@@ -89,11 +68,11 @@ export default function AdminAlertsPage() {
 			setAlertHistory((currentHistory) => {
 				let changed = false;
 				const nextHistory = currentHistory.map((item) => {
-					if (item.status !== "scheduled" || !item.scheduleAt) {
+					if (item.status !== "scheduled" || !item.scheduledAt) {
 						return item;
 					}
 
-					const scheduledAtMs = Date.parse(item.scheduleAt);
+					const scheduledAtMs = Date.parse(item.scheduledAt);
 					if (Number.isNaN(scheduledAtMs) || scheduledAtMs > now) {
 						return item;
 					}
@@ -102,7 +81,7 @@ export default function AdminAlertsPage() {
 					return {
 						...item,
 						status: "published" as AlertHistoryStatus,
-						timestamp: formatSriLankanTime(new Date()),
+						timestamp: new Date().toISOString(),
 					};
 				});
 
@@ -111,7 +90,9 @@ export default function AdminAlertsPage() {
 		};
 
 		promoteScheduledAlerts();
-		const timerId = window.setInterval(promoteScheduledAlerts, 30000);
+		const timerId = window.setInterval(() => {
+			promoteScheduledAlerts();
+		}, 30000);
 
 		return () => {
 			window.clearInterval(timerId);
@@ -257,8 +238,8 @@ export default function AdminAlertsPage() {
 							</div>
 							<p className="mt-2 text-xs text-gray-600">Target: {item.targetAudience}</p>
 							<p className="mt-1 text-xs text-gray-600">Affected Route: {item.affectedRoute}</p>
-							{item.scheduleAt && (
-								<p className="mt-1 text-xs text-gray-600">Scheduled for: {formatSriLankanTime(item.scheduleAt)}</p>
+							{item.scheduledAt && (
+								<p className="mt-1 text-xs text-gray-600">Scheduled for: {item.scheduledAt}</p>
 							)}
 							<p className="mt-1 text-xs text-gray-500">{item.timestamp}</p>
 						</div>
@@ -320,8 +301,14 @@ export default function AdminAlertsPage() {
 							disabled={scheduleAt.trim() === ""}
 							className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
 							onClick={() => {
-								addHistoryItem("scheduled", scheduleAt);
-								toast.success(`Alert scheduled for ${formatSriLankanTime(scheduleAt)}`);
+								const date = new Date(scheduleAt);
+								if (Number.isNaN(date.getTime())) {
+									toast.error("Invalid date/time");
+									return;
+								}
+
+								addHistoryItem("scheduled", date.toISOString());
+								toast.success("Alert scheduled");
 								setShowSchedule(false);
 							}}
 						>
