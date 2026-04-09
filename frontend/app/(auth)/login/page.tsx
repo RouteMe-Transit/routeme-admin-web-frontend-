@@ -16,19 +16,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-green-200 to-yellow-200">
-      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6">
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      {/* Bigger Card */}
+      <div className="bg-white shadow-2xl rounded-2xl p-12 w-full max-w-xl border">
+        
+        <h1 className="text-3xl font-bold text-center mb-8">
           Login to Your Account
         </h1>
 
         {/* Role Selector */}
-        <div className="flex justify-between mb-6">
+        <div className="flex justify-between mb-8">
           {roles.map((r) => (
             <button
               key={r}
               onClick={() => setRole(r)}
-              className={`px-3 py-2 rounded-xl text-sm font-medium transition ${
+              className={`px-5 py-2 rounded-xl text-sm font-medium transition ${
                 role === r
                   ? "bg-green-500 text-white"
                   : "bg-gray-200 text-gray-700"
@@ -40,7 +42,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium mb-1">
               Email
@@ -50,7 +52,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
+              className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
             />
           </div>
 
@@ -63,21 +65,30 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
+              className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition"
+            className="w-full bg-green-500 text-white py-3 rounded-lg text-lg hover:bg-green-600 transition"
           >
             Login as {role}
           </button>
         </form>
 
-        <p className="text-center text-sm mt-4 text-gray-600">
-          Don’t have an account? Sign up
-        </p>
+        {/* Show ONLY for Passenger */}
+        {role === "Passenger" && (
+          <p className="text-center text-sm mt-6 text-gray-600">
+            Don’t have an account?{" "}
+            <a
+              href="/signup" // 👉 you can change later
+              className="text-green-500 font-semibold hover:underline"
+            >
+              Sign Up
+            </a>
+          </p>
+        )}
       </div>
     </div>
   );
