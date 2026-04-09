@@ -25,7 +25,7 @@ export default function PassengerLayout({ children }: PassengerLayoutProps) {
 			<Sidebar role="passenger" />
 			<div className="flex-1 flex flex-col">
 				{showTopBar && <TopBar title={config.title} icon={config.icon} />}
-				<main className="flex-1 p-6">{children}</main>
+				<main className="flex-1">{children}</main>
 			</div>
 		</div>
 	);
