@@ -20,6 +20,7 @@ type FeedbackItem = {
 
 export default function PassengerProfilePage() {
     const [view, setView] = useState<"profile" | "favorites" | "addRoute" | "feedback" | "editProfile" | "changePassword">("profile");
+
     const [user, setUser] = useState<{
     firstName: string;
     lastName: string;
@@ -100,6 +101,7 @@ export default function PassengerProfilePage() {
         toast.success("Profile updated successfully ✅");
         setView("profile");
         };
+
         const [passwordData, setPasswordData] = useState({
             newPassword: "",
             confirmPassword: "",
@@ -135,31 +137,31 @@ export default function PassengerProfilePage() {
             </div>
 
             <div className="flex gap-4 mt-6 justify-center">
-                <button className="w-27.5 h-14.25 bg-white rounded-sm text-[#4CAF8A] font-bold text-md" onClick={() => setView("favorites")}>
+                <button className="w-27.5 h-14.25 bg-white rounded-md text-[#4CAF8A] font-bold text-md hover:bg-gray-200 " onClick={() => setView("favorites")}>
                     FavRoutes
                 </button>
-                <button className="w-27.5 h-14.25 bg-white rounded-sm  font-bold text-md" onClick={() => setView("feedback")}>
+                <button className="w-27.5 h-14.25 bg-white rounded-md  font-bold text-md hover:bg-gray-200" onClick={() => setView("feedback")}>
                     Feedbacks
                 </button>
             </div>
 
-            <div className="flex flex-col items-center mt-10 gap-3">
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-sm"
+            <div className="flex flex-col items-center mt-10 ">
+                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-t-md border-b border-gray-300 hover:bg-gray-200"
                 onClick={() => setView("editProfile")}>
                     <img src="/icons/user1.svg" alt="Edit" className="inline-block w-8 h-8 mr-5" />
                     Edit Profile
                 </button>
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-sm"
+                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 border-b border-gray-300 hover:bg-gray-200"
                     onClick={() => setView("changePassword")}
                 >
                     <img src="/icons/lock.svg" alt="Change Password" className="inline-block w-8 h-8 mr-5" />
                     Change Password
                 </button>
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-sm">
+                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 border-b border-gray-300 hover:bg-gray-200">
                     <img src="/icons/globe.svg" alt="Language" className="inline-block w-8 h-8 mr-5" />
                     Language
                 </button>
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-sm">
+                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-b-md hover:bg-gray-200">
                     <img src="/icons/moon.svg" alt="Dark Mode" className="inline-block w-8 h-8 mr-5" />
                     Dark Mode
                 </button>
