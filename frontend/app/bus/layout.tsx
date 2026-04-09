@@ -79,7 +79,7 @@ export default function BusLayout({ children }: BusLayoutProps) {
 			<Sidebar role="bus" gpsEnabled={gpsEnabled} onGpsToggle={setGpsEnabled} />
 			<div className="flex-1 flex flex-col">
 				<TopBar title={config.title} icon={config.icon} busInfo={busInfo} gpsEnabled={gpsEnabled} />
-				<main className="flex-1 p-6">{children}</main>
+				<main className="flex-1 ">{children}</main>
 			</div>
 		</div>
 	);
