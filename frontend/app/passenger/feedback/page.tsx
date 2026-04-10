@@ -11,7 +11,7 @@ type Submission = {
   meta: string;
 };
 
-const recentSubmissions: Submission[] = [
+const initialSubmissions: Submission[] = [
   {
     id: 1,
     name: "R. Rathnayaka",
@@ -38,8 +38,12 @@ export default function PassengerFeedback() {
     rating: 0,
   });
 
+  const [submissions, setSubmissions] =
+    useState<Submission[]>(initialSubmissions);
+
+  // HANDLE INPUT
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -48,6 +52,7 @@ export default function PassengerFeedback() {
     }));
   };
 
+  // RATING CLICK
   const handleRating = (value: number) => {
     setFormData((prev) => ({
       ...prev,
@@ -55,31 +60,56 @@ export default function PassengerFeedback() {
     }));
   };
 
+  // SUBMIT
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(formData);
+
+    const newSubmission: Submission = {
+      id: submissions.length + 1,
+      name: "You",
+      category: formData.category,
+      rating: formData.rating,
+      message: formData.message,
+      meta: `Now · ${formData.busNumber}`,
+    };
+
+    setSubmissions([newSubmission, ...submissions]);
+
+    // RESET FORM
+    setFormData({
+      category: "",
+      busNumber: "",
+      message: "",
+      rating: 0,
+    });
   };
 
   return (
     <div className="p-6 flex flex-col items-center bg-gray-100 min-h-screen">
       <div className="w-full bg-white rounded-2xl shadow-md p-8">
-        <h2 className="text-2xl font-bold mb-6">Submit Feedback</h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Category */}
+
+          {/* CATEGORY DROPDOWN (FIXED) */}
           <div>
             <label className="block font-semibold mb-2">Category</label>
-            <input
-              type="text"
+            <select
               name="category"
               value={formData.category}
               onChange={handleChange}
               className="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-400"
-              placeholder="Enter category"
-            />
+              required
+            >
+              <option value="">Select category</option>
+              <option value="Punctuality">Punctuality</option>
+              <option value="Driver Behavior">Driver Behavior</option>
+              <option value="Cleanliness">Cleanliness</option>
+              <option value="Safety">Safety</option>
+              <option value="Overall">Overall</option>
+            </select>
           </div>
 
-          {/* Bus Number */}
+          {/* BUS NUMBER */}
           <div>
             <label className="block font-semibold mb-2">Bus Number</label>
             <input
@@ -89,31 +119,31 @@ export default function PassengerFeedback() {
               onChange={handleChange}
               className="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-400"
               placeholder="Enter bus number"
+              required
             />
           </div>
 
-          {/* Rating */}
+          {/* RATING (FIXED STAR UI) */}
           <div>
             <label className="block font-semibold mb-2">Rating</label>
-            <div className="flex gap-3">
+            <div className="flex gap-2 text-5xl cursor-pointer">
               {[1, 2, 3, 4, 5].map((star) => (
-                <button
+                <span
                   key={star}
-                  type="button"
                   onClick={() => handleRating(star)}
-                  className={`w-12 h-12 rounded-lg border flex items-center justify-center text-xl ${
+                  className={`transition ${
                     formData.rating >= star
-                      ? "bg-green-100 border-green-500"
-                      : "bg-white"
+                      ? "text-yellow-400"
+                      : "text-gray-300"
                   }`}
                 >
-                  ⭐
-                </button>
+                  ★
+                </span>
               ))}
             </div>
           </div>
 
-          {/* Message */}
+          {/* MESSAGE */}
           <div>
             <label className="block font-semibold mb-2">Message</label>
             <textarea
@@ -123,10 +153,11 @@ export default function PassengerFeedback() {
               rows={4}
               className="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-400 resize-none"
               placeholder="Write your feedback..."
+              required
             />
           </div>
 
-          {/* Submit */}
+          {/* SUBMIT */}
           <div className="flex justify-center">
             <button
               type="submit"
@@ -135,15 +166,16 @@ export default function PassengerFeedback() {
               Submit Feedback
             </button>
           </div>
+
         </form>
       </div>
 
-      {/* Recent Submissions */}
+      {/* RECENT SUBMISSIONS */}
       <div className="w-full max-w-5xl mt-10">
         <h3 className="text-xl font-bold mb-4">Recent Submissions</h3>
 
         <div className="grid md:grid-cols-2 gap-4">
-          {recentSubmissions.map((item) => (
+          {submissions.map((item) => (
             <div
               key={item.id}
               className="bg-white p-4 rounded-lg border shadow-sm"
