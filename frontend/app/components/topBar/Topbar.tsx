@@ -2,6 +2,7 @@
 
 import { type ReactNode } from "react";
 import { FaCircle } from "react-icons/fa";
+import { usePathname } from "next/navigation";
 
 type BusInfo = {
   busId: string;
@@ -18,6 +19,8 @@ type TopBarProps = {
 };
 
 const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
+  const pathname = usePathname();
+  const isPassengerLiveTracking = pathname === "/passenger/liveTracking";
   const defaultDriver = busInfo?.defaultDriver ?? busInfo?.drivers[0] ?? "";
   const driverSelectKey = `${busInfo?.busId ?? "no-bus"}-${defaultDriver}`;
 
@@ -67,6 +70,30 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
                 <p>Route: {busInfo.routeNumber}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {!busInfo && isPassengerLiveTracking && (
+        <div className="flex gap-3 items-center">
+          <div className="flex items-center gap-2 mr-1">
+            <FaCircle className="text-green-500 animate-pulse text-xs" />
+            <span className="text-green-600 font-semibold">Live</span>
+          </div>
+
+          <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white text-slate-700">
+            <option>All Routes</option>
+            <option>115</option>
+            <option>120</option>
+            <option>122</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="bg-[#4caf8a] text-white px-4 py-2 rounded-lg hover:bg-[#3f9c79] text-sm font-semibold"
+          >
+            Refresh
+          </button>
         </div>
       )}
     </div>

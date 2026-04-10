@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import Sidebar from "../components/sideBar/Sidebar";
-import { topbarConfig } from "@/config/topbarConfig";
+import { topbarConfig } from "@/app/components/topBar/topbarConfig";
 import TopBar from "@/app/components/topBar/Topbar";
 import { usePathname } from "next/navigation";
 
