@@ -3,9 +3,11 @@ export const topbarConfig = {
   "/admin/fleetMonitor": { title: "Fleet Monitor", icon: <img src="/icons/map.png" alt="Fleet Monitor" className="w-10 h-10" /> },
   "/admin/manageRoutes": { title: "Manage Routes", icon: <img src="/icons/manageRoutes.png" alt="Manage Routes" className="w-10 h-10" /> },
   "/admin/manageBuses": { title: "Manage Buses", icon: <img src="/icons/bus.png" alt="Manage Buses" className="w-10 h-10" /> },
+  "/admin/manageStops": { title: "Manage Stops", icon: <img src="/icons/bus-stops.png" alt="Manage Stops" className="w-10 h-10" /> },
   "/admin/publishNews": { title: "Publish News", icon: <img src="/icons/newspaper.png" alt="Publish News" className="w-10 h-10" /> },
   "/admin/alerts": { title: "Send Alerts", icon: <img src="/icons/alarm.png" alt="Alerts" className="w-8 h-8" /> },
   "/admin/users": { title: "Users", icon: <img src="/icons/users.png" alt="Users" className="w-10 h-10" /> },
+  "/admin/reports": { title: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="w-10 h-10" /> },
   "/admin/complaints": { title: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaints" className="w-10 h-10" /> },
   "/admin/feedback": { title: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="w-10 h-10" /> },
 

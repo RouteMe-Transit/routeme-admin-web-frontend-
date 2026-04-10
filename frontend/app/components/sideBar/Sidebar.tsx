@@ -35,6 +35,7 @@ const menus = {
     { id: "fleet", label: "Fleet Monitor", icon: <img src="/icons/map.png" alt="Fleet Monitoring" className="h-7 w-7 object-contain" />, path: "/admin/fleetMonitor" },
     { id: "routes", label: "Manage Routes", icon: <img src="/icons/manageRoutes.png" alt="Route" className="h-7 w-7 object-contain" />, path: "/admin/manageRoutes" },
     { id: "buses", label: "Manage Buses", icon: <img src="/icons/bus.png" alt="Bus" className="h-7 w-7 object-contain" />, path: "/admin/manageBuses" },
+    { id: "stops", label: "Manage Stops", icon: <img src="/icons/bus-stops.png" alt="Feedback" className="h-7 w-7 object-contain" />, path: "/admin/manageStops" },
     { id: "news", label: "Publish News", icon: <img src="/icons/newspaper.png" alt="News" className="h-7 w-7 object-contain" />, path: "/admin/publishNews" },
     {
       id: "alerts",
@@ -43,8 +44,10 @@ const menus = {
       path: "/admin/alerts",
     },
     { id: "users", label: "Users", icon: <img src="/icons/users.png" alt="Users" className="h-7 w-7 object-contain" />, path: "/admin/users" },
+    { id: "reports", label: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="h-7 w-7 object-contain" />, path: "/admin/reports" },
     { id: "complaints", label: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaint" className="h-7 w-7 object-contain" />, path: "/admin/complaints" },
     { id: "feedback", label: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="h-7 w-7 object-contain" />, path: "/admin/feedback" },
+    
   ],
 
   bus: [
@@ -96,7 +99,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
       <div className="border-t border-gray-700" />
 
         {/* Menu */}
-        <div className="flex flex-col mt-7 space-y-2 px-2">
+        <div className="flex flex-col mt-3 space-y-2 px-2">
           {items.map((item) => (
             <SidebarItem
               key={item.id}
@@ -112,7 +115,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="mt-auto p-4 border-t border-gray-600">
+        <div className="mt-auto p-2 border-t border-gray-600">
           {role === "bus" ? (
             <button
               onClick={() => {
