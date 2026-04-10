@@ -101,7 +101,7 @@ export default function AdminAlertsPage() {
 
 	return (
 		<>
-		<section className=" flex space-y-2  gap-5">
+		<section className=" flex space-y-2  gap-5 p-6">
 			<div className="bg-white rounded-md shadow p-4 w-180">
 				<h2 className="text-xl font-bold mb-4">Create New Alert</h2>
 				<label className="block mb-5 font-semibold">Alert Type:</label>
