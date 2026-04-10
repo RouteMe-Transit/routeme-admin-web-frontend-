@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+type TimeFilter = "all" | "today" | "month";
+
 export default function AdminFeedback() {
   const feedbacks = [
     { id: 1, name: "K.Jayawardane", bus: "Bus 12", category: "Punctuality", comment: "The bus arrived exactly on time...", stars: 5, date: "2026-04-01" },
@@ -13,7 +15,7 @@ export default function AdminFeedback() {
   ];
 
   const [starFilter, setStarFilter] = useState<number | "all">("all");
-  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "month">("all");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
 
   const today = new Date().toISOString().split("T")[0];
   const currentMonth = today.slice(0, 7);
@@ -29,18 +31,13 @@ export default function AdminFeedback() {
     return matchesStars && matchesTime;
   });
 
-  const renderStars = (count: number) => "⭐".repeat(count);
+  const renderStars = (count: number) => "\u2605".repeat(count);
 
   return (
     <div className="min-h-screen bg-white p-8">
-
-      {/* Top Section: Emoji Box + Filters (Parallel) */}
-      <div className="flex flex-wrap gap-6 items-center mb-6">
-
-        {/* Emoji Summary Card */}
-        <div className="bg-white border rounded-2xl p-6 shadow-md w-80 flex items-center gap-6 hover:shadow-lg transition">
-
-          <div className="w-24 h-24 flex items-center justify-center bg-yellow-50 rounded-2xl">
+      <div className="mb-6 flex flex-wrap items-center gap-6">
+        <div className="flex w-80 items-center gap-6 rounded-2xl border bg-white p-6 shadow-md transition hover:shadow-lg">
+          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-yellow-50">
             <svg width="64" height="64" viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="28" fill="#FFD93B" />
               <circle cx="22" cy="26" r="3" fill="#333" />
@@ -50,20 +47,14 @@ export default function AdminFeedback() {
           </div>
 
           <div>
-            <p className="text-4xl font-extrabold text-slate-800">
-              {filteredFeedbacks.length}
-            </p>
+            <p className="text-4xl font-extrabold text-slate-800">{filteredFeedbacks.length}</p>
             <p className="text-sm text-slate-500">Filtered Feedback</p>
           </div>
-
         </div>
 
-        {/* Filters (Now beside the card) */}
-        <div className="flex gap-4 flex-wrap">
-
-          {/* Star Filter */}
+        <div className="flex flex-wrap gap-4">
           <select
-            className="border p-2 rounded-md"
+            className="rounded-md border p-2"
             value={starFilter}
             onChange={(e) =>
               setStarFilter(
@@ -72,33 +63,27 @@ export default function AdminFeedback() {
             }
           >
             <option value="all">All Ratings</option>
-            <option value="5">⭐ 5 Stars</option>
-            <option value="4">⭐ 4 Stars</option>
-            <option value="3">⭐ 3 Stars</option>
-            <option value="2">⭐ 2 Stars</option>
-            <option value="1">⭐ 1 Star</option>
+            <option value="5">{"\u2605"} 5 Stars</option>
+            <option value="4">{"\u2605"} 4 Stars</option>
+            <option value="3">{"\u2605"} 3 Stars</option>
+            <option value="2">{"\u2605"} 2 Stars</option>
+            <option value="1">{"\u2605"} 1 Star</option>
           </select>
 
-          {/* Time Filter */}
           <select
-            className="border p-2 rounded-md"
+            className="rounded-md border p-2"
             value={timeFilter}
-            onChange={(e) => setTimeFilter(e.target.value as any)}
+            onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
           >
             <option value="all">All Time</option>
             <option value="today">Today</option>
             <option value="month">This Month</option>
           </select>
-
         </div>
-
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-
-        {/* Header */}
-        <div className="grid grid-cols-6 bg-gray-100 text-sm font-semibold p-4">
+      <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+        <div className="grid grid-cols-6 bg-gray-100 p-4 text-sm font-semibold">
           <div>Name</div>
           <div>Bus</div>
           <div>Category</div>
@@ -107,15 +92,13 @@ export default function AdminFeedback() {
           <div>Date</div>
         </div>
 
-        {/* Rows */}
         {filteredFeedbacks.map((fb) => {
           const initial = fb.name.charAt(0).toUpperCase();
 
           return (
-            <div key={fb.id} className="grid grid-cols-6 p-4 text-sm items-center">
-
+            <div key={fb.id} className="grid grid-cols-6 items-center p-4 text-sm">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 font-bold text-white">
                   {initial}
                 </div>
                 {fb.name}
@@ -126,11 +109,9 @@ export default function AdminFeedback() {
               <div>{fb.comment}</div>
               <div>{renderStars(fb.stars)}</div>
               <div>{fb.date}</div>
-
             </div>
           );
         })}
-
       </div>
     </div>
   );
