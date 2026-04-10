@@ -101,7 +101,7 @@ export default function AdminAlertsPage() {
 
 	return (
 		<>
-		<section className=" flex space-y-2  gap-5">
+		<section className=" flex space-y-2  gap-5 p-6">
 			<div className="bg-white rounded-md shadow p-4 w-180">
 				<h2 className="text-xl font-bold mb-4">Create New Alert</h2>
 				<label className="block mb-5 font-semibold">Alert Type:</label>
@@ -181,7 +181,7 @@ export default function AdminAlertsPage() {
 					</div>
 				</div>
 				<div>
-					<p className="mt-3 text-sm font-medium text-gray-600">* If "Public Alert" is checked, the alert will be sent to all passengers. Otherwise, it will only be sent to passengers of the selected route.</p>
+					<p className="mt-3 text-sm font-medium text-gray-600">* If &quot;Public Alert&quot; is checked, the alert will be sent to all passengers. Otherwise, it will only be sent to passengers of the selected route.</p>
 				</div>
 				
 				<div className="mt-6 flex flex-wrap items-center justify-between gap-3">
