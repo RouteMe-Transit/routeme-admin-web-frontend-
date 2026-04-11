@@ -10,7 +10,6 @@ export default function BusProfilePage() {
   seats: 45,
   busId: "NA-1879",
   registrationNumber: "WP NA-1879",
-  internalId: "0047",
   finishedTripsToday: 6,
   profilePicture: "/icons/bus.png",
 };
@@ -31,15 +30,12 @@ export default function BusProfilePage() {
             <h3 className="text-md font-bold text-[#94A0AE] ml-10 mt-10">BUS DETAILS</h3>
 
             <div className="flex flex-row gap-5 h-80 items-center justify-center">
-                <div className="flex flex-col gap-4 ">
+                <div className="flex flex-col gap-4 mt-[-70px]">
                 <div className =" justify-between w-100 items-center flex p-4 rounded-lg bg-white">
                     <p className="text-[#94A0AE] font-semibold">Bus Number</p>
                     <p className="text-black font-semibold">{bus.registrationNumber}</p>
                 </div>
-                <div className =" justify-between w-100 items-center flex p-4 rounded-lg bg-white">
-                    <p className="text-[#94A0AE] font-semibold">Bus ID</p>
-                    <p className="text-black font-semibold">{bus.internalId}</p>
-                </div>
+                
                 <div className =" justify-between w-100 items-center flex p-4 rounded-lg bg-white">
                     <p className="text-[#94A0AE] font-semibold">Total Seats</p>
                     <p className="text-black font-semibold">{bus.seats}</p>
