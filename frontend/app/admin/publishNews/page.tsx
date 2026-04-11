@@ -347,7 +347,7 @@ export default function AdminPublishNews() {
               }}
             >
               <img
-                src="/icons/addimage.png"
+                src="/icons/newsimage.png"
                 alt="Add cover image"
                 style={{ width: "64px", height: "64px", objectFit: "contain" }}
               />
