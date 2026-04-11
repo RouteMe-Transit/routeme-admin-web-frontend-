@@ -355,9 +355,9 @@ export default function AdminManageStopsPage() {
                                         <td className="p-3 flex gap-4">
                                             <button
                                                 onClick={() => handleEdit(stop)}
-                                                className="px-2 py-1 bg-yellow-500 text-white rounded"
+                                                className="px-2 py-1"
                                             >
-                                                <AiFillEdit />
+                                                <AiFillEdit size={20} color="blue"/>
                                             </button>
 
                                             <button
