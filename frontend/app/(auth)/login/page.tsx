@@ -80,9 +80,9 @@ export default function LoginPage() {
         {/* Show ONLY for Passenger */}
         {role === "Passenger" && (
           <p className="text-center text-sm mt-6 text-gray-600">
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <a
-              href="/signUp" // 👉 you can change later
+              href="/signUp"
               className="text-green-500 font-semibold hover:underline"
             >
               Sign Up
