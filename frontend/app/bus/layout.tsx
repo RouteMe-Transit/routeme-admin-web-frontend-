@@ -5,6 +5,7 @@ import Sidebar from "../components/sideBar/Sidebar";
 import { topbarConfig } from "@/app/components/topBar/topbarConfig";
 import TopBar from "@/app/components/topBar/Topbar";
 import { usePathname } from "next/navigation";
+import { BusThemeProvider, useBusTheme } from "./BusThemeContext";
 
 type BusLayoutProps = {
 	children: ReactNode;
@@ -30,7 +31,17 @@ const defaultBusInfo: BusInfo = {
 };
 
 export default function BusLayout({ children }: BusLayoutProps) {
+	return (
+		<BusThemeProvider>
+			<BusLayoutContent>{children}</BusLayoutContent>
+		</BusThemeProvider>
+	);
+}
+
+function BusLayoutContent({ children }: BusLayoutProps) {
 	const pathname = usePathname();
+	const { theme } = useBusTheme();
+	const showTopBar = pathname !== "/bus/profile";
 	const [gpsEnabled, setGpsEnabled] = useState(false);
 	const configMap = topbarConfig as Record<string, TopbarItem>;
 	const config = configMap[pathname] ?? { title: "Bus", icon: null };
@@ -75,10 +86,10 @@ export default function BusLayout({ children }: BusLayoutProps) {
 	}, []);
 
 	return (
-		<div className="min-h-screen w-full bg-primary text-accent flex">
+		<div data-theme={theme} className="bus-theme min-h-screen w-full bg-primary text-accent flex">
 			<Sidebar role="bus" gpsEnabled={gpsEnabled} onGpsToggle={setGpsEnabled} />
 			<div className="flex-1 flex flex-col">
-				<TopBar title={config.title} icon={config.icon} busInfo={busInfo} gpsEnabled={gpsEnabled} />
+				{showTopBar && <TopBar title={config.title} icon={config.icon} busInfo={busInfo} gpsEnabled={gpsEnabled} />}
 				<main className="flex-1 ">{children}</main>
 			</div>
 		</div>

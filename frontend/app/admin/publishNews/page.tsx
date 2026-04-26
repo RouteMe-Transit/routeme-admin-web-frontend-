@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import toast from "react-hot-toast";
+import { useAdminTheme } from "../AdminThemeContext";
 
 type NewsCategory =
   | "Service Update"
@@ -21,6 +22,7 @@ const CATEGORY_OPTIONS: NewsCategory[] = [
 ];
 
 export default function AdminPublishNews() {
+  const { isDarkMode } = useAdminTheme();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<NewsCategory>("Service Update");
   const [publishDate, setPublishDate] = useState("");
@@ -79,10 +81,19 @@ export default function AdminPublishNews() {
   };
 
   return (
-    <>
+    <div
+      style={{
+        background: isDarkMode ? "#1A2F47" : "transparent",
+        minHeight: "100%",
+        width: "100%",
+        padding: "24px",
+        boxSizing: "border-box",
+      }}
+    >
       <div
+        className="admin-publish-news-card"
         style={{
-          background: "#fff",
+          background: isDarkMode ? "#14263A" : "#fff",
           borderRadius: "12px",
           boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
           padding: "32px",
@@ -94,7 +105,7 @@ export default function AdminPublishNews() {
           style={{
             fontSize: "22px",
             fontWeight: 800,
-            color: "#1b3a5c",
+            color: isDarkMode ? "#ffffff" : "#1b3a5c",
             marginBottom: "28px",
           }}
         >
@@ -107,7 +118,7 @@ export default function AdminPublishNews() {
             display: "block",
             marginBottom: "8px",
             fontWeight: 700,
-            color: "#1b3a5c",
+            color: isDarkMode ? "#ffffff" : "#1b3a5c",
             fontSize: "14px",
           }}
         >
@@ -123,8 +134,8 @@ export default function AdminPublishNews() {
             borderRadius: "8px",
             padding: "0 16px",
             fontSize: "14px",
-            color: "#111",
-            background: "#fff",
+            color: isDarkMode ? "#ffffff" : "#111",
+            background: isDarkMode ? "#1A2F47" : "#fff",
             marginBottom: "24px",
             boxSizing: "border-box",
           }}
@@ -148,7 +159,7 @@ export default function AdminPublishNews() {
                 display: "block",
                 marginBottom: "8px",
                 fontWeight: 700,
-                color: "#1b3a5c",
+                color: isDarkMode ? "#ffffff" : "#1b3a5c",
                 fontSize: "14px",
               }}
             >
@@ -163,8 +174,8 @@ export default function AdminPublishNews() {
                 borderRadius: "8px",
                 padding: "0 12px",
                 fontSize: "14px",
-                color: "#111",
-                background: "#fff",
+                color: isDarkMode ? "#ffffff" : "#111",
+                background: isDarkMode ? "#1A2F47" : "#fff",
                 boxSizing: "border-box",
               }}
               value={category}
@@ -183,7 +194,7 @@ export default function AdminPublishNews() {
                 display: "block",
                 marginBottom: "8px",
                 fontWeight: 700,
-                color: "#1b3a5c",
+                color: isDarkMode ? "#ffffff" : "#1b3a5c",
                 fontSize: "14px",
               }}
             >
@@ -199,8 +210,8 @@ export default function AdminPublishNews() {
                 borderRadius: "8px",
                 padding: "0 12px",
                 fontSize: "14px",
-                color: "#111",
-                background: "#fff",
+                color: isDarkMode ? "#ffffff" : "#111",
+                background: isDarkMode ? "#1A2F47" : "#fff",
                 boxSizing: "border-box",
               }}
               value={publishDate}
@@ -230,8 +241,8 @@ export default function AdminPublishNews() {
             borderRadius: "8px",
             padding: "12px 16px",
             fontSize: "14px",
-            color: "#111",
-            background: "#fff",
+            color: isDarkMode ? "#ffffff" : "#111",
+            background: isDarkMode ? "#1A2F47" : "#fff",
             resize: "vertical",
             marginBottom: "24px",
             boxSizing: "border-box",
@@ -248,7 +259,7 @@ export default function AdminPublishNews() {
             display: "block",
             marginBottom: "8px",
             fontWeight: 700,
-            color: "#1b3a5c",
+            color: isDarkMode ? "#ffffff" : "#1b3a5c",
             fontSize: "14px",
           }}
         >
@@ -266,9 +277,9 @@ export default function AdminPublishNews() {
             position: "relative",
             width: "100%",
             height: "200px",
-            border: `2px dashed ${isDragging ? "#4CAF8A" : "#9ca3af"}`,
+            border: `2px dashed ${isDragging ? "#4CAF8A" : isDarkMode ? "#7f9ab8" : "#9ca3af"}`,
             borderRadius: "12px",
-            background: isDragging ? "#f0faf6" : "#f8fafc",
+            background: isDragging ? "#f0faf6" : isDarkMode ? "#14263A" : "#f8fafc",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -351,11 +362,11 @@ export default function AdminPublishNews() {
                 alt="Add cover image"
                 style={{ width: "64px", height: "64px", objectFit: "contain" }}
               />
-              <p style={{ fontSize: "14px", fontWeight: 600, color: "#4b5563" }}>
+              <p style={{ fontSize: "14px", fontWeight: 600, color: isDarkMode ? "#ffffff" : "#4b5563" }}>
                 Drag &amp; drop or{" "}
                 <span style={{ color: "#4CAF8A" }}>browse</span> to upload
               </p>
-              <p style={{ fontSize: "12px", color: "#9ca3af" }}>
+              <p style={{ fontSize: "12px", color: isDarkMode ? "#d8e4f2" : "#9ca3af" }}>
                 PNG, JPG up to 5 MB
               </p>
             </div>
@@ -386,9 +397,9 @@ export default function AdminPublishNews() {
             style={{
               height: "48px",
               padding: "0 28px",
-              background: "#fff",
+              background: isDarkMode ? "#1A2F47" : "#fff",
               border: "1.5px solid #d1d5db",
-              color: "#1b3a5c",
+              color: isDarkMode ? "#ffffff" : "#1b3a5c",
               fontWeight: 800,
               borderRadius: "8px",
               cursor: "pointer",
@@ -403,9 +414,9 @@ export default function AdminPublishNews() {
             style={{
               height: "48px",
               padding: "0 28px",
-              background: "#fff",
+              background: isDarkMode ? "#1A2F47" : "#fff",
               border: "1.5px solid #d1d5db",
-              color: canSubmit ? "#1b3a5c" : "#9ca3af",
+              color: canSubmit ? (isDarkMode ? "#ffffff" : "#1b3a5c") : "#9ca3af",
               fontWeight: 800,
               borderRadius: "8px",
               cursor: canSubmit ? "pointer" : "not-allowed",
@@ -419,9 +430,9 @@ export default function AdminPublishNews() {
             style={{
               height: "48px",
               padding: "0 28px",
-              background: "#fff",
+              background: isDarkMode ? "#1A2F47" : "#fff",
               border: "1.5px solid #d1d5db",
-              color: "#6b7280",
+              color: isDarkMode ? "#ffffff" : "#6b7280",
               fontWeight: 800,
               borderRadius: "8px",
               cursor: "pointer",
@@ -603,6 +614,6 @@ export default function AdminPublishNews() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

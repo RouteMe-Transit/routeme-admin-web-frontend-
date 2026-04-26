@@ -93,7 +93,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const items = menus[role] as MenuItem[];
 
   return (
-    <div className="w-[385px] h-screen bg-[#122843] text-white flex flex-col sticky top-0 z-20">
+    <div className={`w-[385px] h-screen bg-[#122843] text-white flex flex-col sticky top-0 z-20 ${role === "passenger" ? "passenger-sidebar" : ""} ${role === "bus" ? "bus-sidebar" : ""} ${role === "admin" ? "admin-sidebar" : ""}`}>
       <LogoNname/>
 
       <div className="border-t border-gray-700" />

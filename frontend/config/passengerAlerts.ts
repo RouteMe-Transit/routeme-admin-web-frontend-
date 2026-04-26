@@ -1,4 +1,5 @@
 // This file defines the structure and sample data for passenger alerts in the application. It also includes a utility function to count unread alerts.
+//shared by passenger, bus driver interfaces and sidebar. so stay in config folder.
 import { ALERT_LABEL_MAP, ALERT_STYLE_MAP, AlertTypeValue } from "@/config/alertTypes";
 
 export const PASSENGER_ALERTS_CHANGED_EVENT = "passenger-alerts-changed";

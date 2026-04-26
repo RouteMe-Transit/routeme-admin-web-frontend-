@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FaXmark } from "react-icons/fa6";
 import toast from "react-hot-toast";
 import {
 	ALERT_LABEL_MAP,
@@ -9,19 +8,11 @@ import {
 	ALERT_TYPE_OPTIONS,
 	AlertTypeValue,
 } from "@/config/alertTypes";
-
-type AlertHistoryStatus = "published" | "scheduled";
-
-type AlertHistoryItem = {
-	id: number;
-	title: string;
-	type: AlertTypeValue;
-	status: AlertHistoryStatus;
-	targetAudience: string;
-	affectedRoute: string;
-	timestamp: string;
-	scheduledAt?: string;
-};
+import AlertHistoryItemCard from "./AlertHistoryItemCard";
+import AlertHistoryViewModal from "./AlertHistoryViewModal";
+import AlertPreviewModal from "./AlertPreviewModal";
+import AlertScheduleModal from "./AlertScheduleModal";
+import type { AlertHistoryItem, AlertHistoryStatus } from "./types";
 
 const initialAlertHistory: AlertHistoryItem[] = [];
 
@@ -36,6 +27,7 @@ export default function AdminAlertsPage() {
 	const [showSchedule, setShowSchedule] = useState(false);
 	const [scheduleAt, setScheduleAt] = useState("");
 	const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>(initialAlertHistory);
+	const [selectedHistoryAlert, setSelectedHistoryAlert] = useState<AlertHistoryItem | null>(null);
 	const canSubmit =
 		alertType.trim() !== "" &&
 		affectedRoute.trim() !== "" &&
@@ -51,6 +43,7 @@ export default function AdminAlertsPage() {
 			{
 				id: Date.now(),
 				title: alertTitle,
+				description,
 				type: alertType,
 				status,
 				targetAudience: getTargetAudience(),
@@ -60,6 +53,25 @@ export default function AdminAlertsPage() {
 			},
 			...currentHistory,
 		]);
+	};
+
+	const handleCreateAlert = () => {
+		// TODO: Replace with backend API call when alert endpoints are ready.
+		addHistoryItem("published");
+		toast.success("Alert published successfully");
+	};
+
+	const handleConfirmSchedule = () => {
+		const date = new Date(scheduleAt);
+		if (Number.isNaN(date.getTime())) {
+			toast.error("Invalid date/time");
+			return;
+		}
+
+		// TODO: Replace with backend API call when scheduling endpoint is ready.
+		addHistoryItem("scheduled", date.toISOString());
+		toast.success("Alert scheduled");
+		setShowSchedule(false);
 	};
 
 	useEffect(() => {
@@ -195,7 +207,7 @@ export default function AdminAlertsPage() {
 						<button 
 							disabled={!canSubmit}
 							onClick={() => setShowSchedule(true)}
-							className="bg-green-500 px-4 py-2 rounded-md text-white hover:bg-green-600 hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-blue-400">
+							className="bg-green-500 px-4 py-2 rounded-md text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-blue-400">
 							Schedule
 						</button>
 					</div>
@@ -206,10 +218,7 @@ export default function AdminAlertsPage() {
 						<button
 							disabled={!canSubmit}
 							className="bg-blue-500 px-4 py-2 rounded-md text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-blue-400"
-							onClick={() => {
-								addHistoryItem("published");
-								toast.success("Alert published successfully");
-							}}
+							onClick={handleCreateAlert}
 						>
 							Create Alert
 						</button>
@@ -220,104 +229,33 @@ export default function AdminAlertsPage() {
 				<h3 className="mb-4 text-lg font-bold text-gray-800">History</h3>
 				<div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
 					{alertHistory.map((item) => (
-						<div key={item.id} className={`rounded-md border-l-4 p-3 shadow-sm ${ALERT_STYLE_MAP[item.type].cardClass}`}>
-							<div className="flex items-start justify-between gap-3">
-								<div className="min-w-0">
-									<p className="truncate text-sm font-semibold text-gray-800">{item.title}</p>
-									<p className="text-xs text-gray-500">{ALERT_LABEL_MAP[item.type]}</p>
-								</div>
-								<span
-									className={`shrink-0 rounded-full border px-2 py-1 text-xs font-semibold ${
-										item.status === "published"
-											? "border-emerald-300 bg-emerald-100 text-emerald-700"
-											: "border-amber-300 bg-amber-100 text-amber-700"
-									}`}
-								>
-									{item.status}
-								</span>
-							</div>
-							<p className="mt-2 text-xs text-gray-600">Target: {item.targetAudience}</p>
-							<p className="mt-1 text-xs text-gray-600">Affected Route: {item.affectedRoute}</p>
-							{item.scheduledAt && (
-								<p className="mt-1 text-xs text-gray-600">Scheduled for: {item.scheduledAt}</p>
-							)}
-							<p className="mt-1 text-xs text-gray-500">{item.timestamp}</p>
-						</div>
+						<AlertHistoryItemCard key={item.id} item={item} onView={setSelectedHistoryAlert} />
 					))}
 				</div>
 			</div>
 		</section>
 
-		{/* if showPreview is true, show the preview modal */}
-		{showPreview && (
-			<div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-				<div className="relative bg-white rounded-lg shadow-lg p-8 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto">
-					<button
-						type="button"
-						aria-label="Close preview"
-						className="absolute right-4 top-4 text-2xl text-red-500 hover:text-white hover:bg-red-500 border border-red-500 rounded-full p-1 m2-"
-						onClick={() => setShowPreview(false)}
-					>
-						<FaXmark />
-					</button>
-					<h2 className="text-xl font-bold mb-6">Alert Preview</h2>
-					
-					<div className="space-y-4 mb-6">
-						<div className={`border-l-4 p-4 rounded ${previewStyle.cardClass}`}>
-							<p className="text-sm text-gray-600 break-words"><strong>Alert Type:</strong> {selectedAlertLabel}</p>
-							<p className="text-sm text-gray-600 mt-2 break-words"><strong>Affected Route/Bus:</strong> {affectedRoute || "N/A"}</p>
-							<p className="text-base font-bold text-gray-700 mt-3 break-words">{alertTitle || "(No title entered)"}</p>
-							<p className="text-gray-700 mt-3 whitespace-pre-wrap break-words">{description || "(No description entered)"}</p>
-							<p className="text-sm text-gray-600 mt-4 break-words"><strong>Target Audience:</strong> {isPublicAlert ? "All Passengers" : (targetRoute || "Not selected")}</p>
-						</div>
-					</div>
-					
-				</div>
-			</div>
-		)}
+		<AlertHistoryViewModal item={selectedHistoryAlert} onClose={() => setSelectedHistoryAlert(null)} />
 
-		{showSchedule && (
-			<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-				<div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-lg mx-4">
-					
-					<h3 className="mb-4 text-lg font-bold">Schedule Alert</h3>
-					<label className="mb-2 block text-sm font-semibold">Select Date and time</label>
-					<input
-						type="datetime-local"
-						value={scheduleAt}
-						onChange={(e) => setScheduleAt(e.target.value)}
-						className="h-10 w-full rounded-md border border-[#828282]  px-2"
-					/>
-					<div className="mt-5 flex justify-end gap-3">
-						<button
-							type="button"
-							className="rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600"
-							onClick={() => setShowSchedule(false)}
-						>
-							Cancel
-						</button>
-						<button
-							type="button"
-							disabled={scheduleAt.trim() === ""}
-							className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
-							onClick={() => {
-								const date = new Date(scheduleAt);
-								if (Number.isNaN(date.getTime())) {
-									toast.error("Invalid date/time");
-									return;
-								}
+		<AlertPreviewModal
+			open={showPreview}
+			onClose={() => setShowPreview(false)}
+			previewCardClass={previewStyle.cardClass}
+			selectedAlertLabel={selectedAlertLabel}
+			affectedRoute={affectedRoute}
+			alertTitle={alertTitle}
+			description={description}
+			isPublicAlert={isPublicAlert}
+			targetRoute={targetRoute}
+		/>
 
-								addHistoryItem("scheduled", date.toISOString());
-								toast.success("Alert scheduled");
-								setShowSchedule(false);
-							}}
-						>
-							Confirm Schedule
-						</button>
-					</div>
-				</div>
-			</div>
-		)}
+		<AlertScheduleModal
+			open={showSchedule}
+			scheduleAt={scheduleAt}
+			onScheduleAtChange={setScheduleAt}
+			onCancel={() => setShowSchedule(false)}
+			onConfirm={handleConfirmSchedule}
+		/>
 
 		</>
 	);

@@ -70,91 +70,74 @@ export default function AdminReportsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded shadow overflow-x-auto">
-        <table className="w-full border-collapse">
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+        <div className="grid grid-cols-4 bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-600 border-b uppercase tracking-wide">
+          <div>Report ID</div>
+          <div>Bus Number</div>
+          <div>Report</div>
+          <div className="text-center">Action</div>
+        </div>
 
-          {/* Header */}
-          <thead className="bg-[#122843] text-white">
-            <tr>
-              <th className="p-3 text-left">Report ID</th>
-              <th className="p-3 text-left">Bus Number</th>
-              <th className="p-3 text-left">Report</th>
-              <th className="p-3 text-left">Actions</th>
-            </tr>
-          </thead>
+        {filteredReports.length > 0 ? (
+          filteredReports.map((item, index) => {
+            const reportCode = `R${String(index + 1).padStart(2, "0")}`;
 
-          {/* Body */}
-          <tbody>
-            {filteredReports.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="text-center p-4 text-gray-500">
-                  No reports found
-                </td>
-              </tr>
-            ) : (
-              filteredReports.map((item, index) => {
-                const reportCode = `R${String(index + 1).padStart(2, "0")}`;
+            return (
+              <div
+                key={item.id}
+                className="grid grid-cols-4 items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition"
+              >
+                <div className="font-semibold">
+                  <span className="bg-[#122843] text-white px-2 py-1 rounded text-sm">
+                    {reportCode}
+                  </span>
+                </div>
 
-                return (
-                  <tr
-                    key={item.id}
-                    className={`${
-                      index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                    } hover:bg-blue-50`}
+                <div>{item.busNumber}</div>
+
+                <div className="max-w-[250px]">
+                  <p className="truncate text-sm text-gray-700" title={item.report}>
+                    {item.report}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-center gap-1.5">
+                  <button
+                    onClick={() => setSelectedReport(item)}
+                    className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition"
                   >
-                    {/* Report ID */}
-                    <td className="p-3">
-                      <span className="bg-[#122843] text-white px-2 py-1 rounded text-sm">
-                        {reportCode}
-                      </span>
-                    </td>
-
-                    {/* Bus */}
-                    <td className="p-3">{item.busNumber}</td>
-
-                    {/* Truncated Report */}
-                    <td className="p-3 max-w-[250px]">
-                      <p className="truncate text-sm text-gray-700" title={item.report}>
-                        {item.report}
-                      </p>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="p-3 flex gap-4">
-                      <button
-                        onClick={() => setSelectedReport(item)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <IoEye size={20} />
-                      </button>
-                      <button
-                        onClick={() => markAsViewed(item.id)}
-                        className={`transition-colors ${
-                          viewedReports.includes(item.id)
-                            ? "text-green-600 hover:text-green-700"
-                            : "text-red-600 hover:text-red-700"
-                        }`}
-                        title={
-                          viewedReports.includes(item.id)
-                            ? "Marked as viewed"
-                            : "Mark as viewed"
-                        }
-                        aria-label={
-                          viewedReports.includes(item.id)
-                            ? "Marked as viewed"
-                            : "Mark report as viewed"
-                        }
-                      >
-                        <IoCheckmarkDoneCircle size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-
-        </table>
+                    <IoEye size={18} className="text-blue-600" />
+                  </button>
+                  <button
+                    onClick={() => markAsViewed(item.id)}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
+                      viewedReports.includes(item.id)
+                        ? "bg-green-50 hover:bg-green-100"
+                        : "bg-red-50 hover:bg-red-100"
+                    }`}
+                    title={
+                      viewedReports.includes(item.id)
+                        ? "Marked as viewed"
+                        : "Mark as viewed"
+                    }
+                    aria-label={
+                      viewedReports.includes(item.id)
+                        ? "Marked as viewed"
+                        : "Mark report as viewed"
+                    }
+                  >
+                    <IoCheckmarkDoneCircle
+                      size={18}
+                      className={viewedReports.includes(item.id) ? "text-green-600" : "text-red-600"}
+                    />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-20 text-gray-400 text-sm">No reports found</div>
+        )}
       </div>
 
       {/* View Modal */}
