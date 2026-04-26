@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { BUS_ALERT_TYPES, type BusAlertType, sendBusAlertToPassengers } from "@/config/passengerAlerts";
 import { ALERT_LABEL_MAP } from "@/config/alertTypes";
 import { formatSriLankanTime } from "@/utils/sriLankanTime";
+import BusAlertCard from "./BusAlertCard";
 
 type SentAlertHistoryItem = {
     id: number;
@@ -136,29 +137,19 @@ export default function BusAlertsPage() {
                     const color = ALERT_COLOR_MAP[type];
 
                     return (
-                        <article
+                        <BusAlertCard
                             key={type}
-                            className={`flex h-[216.891px] w-[293.069px] flex-col rounded-2xl border bg-[#FFFFFF] p-4 shadow-sm transition hover:shadow-md ${color.cardBorder}`}
-                        >
-                            <h3 className={`w-full text-center text-base font-bold ${color.titleText}`}>{label}</h3>
-
-                            <div className="flex flex-1 items-center justify-center">
-                                <img src={iconSrc} alt={label} className="h-14 w-14 object-contain" />
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => handleSendAlert(type)}
-                                className={`mx-auto h-[30.663px] w-[145.377px] rounded-xl text-sm font-bold text-[#4B5563] transition ${color.buttonBg} ${color.buttonHover}`}
-                            >
-                                Send Alert
-                            </button>
-                        </article>
+                            type={type}
+                            label={label}
+                            iconSrc={iconSrc}
+                            color={color}
+                            onSend={handleSendAlert}
+                        />
                     );
                 })}
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm w-255 ml-8">
+            <div className="bus-alert-panel rounded-2xl border border-gray-200 bg-white p-4 shadow-sm w-255 ml-8">
                 <h2 className="mb-3 text-lg font-bold text-[#828282]">Recent Alerts</h2>
 
                 {sentAlertsHistory.length === 0 ? (
@@ -168,7 +159,7 @@ export default function BusAlertsPage() {
                         {sentAlertsHistory.map((item) => (
                             <li
                                 key={item.id}
-                                className={`flex items-center justify-between rounded-lg border px-3 py-2 ${ALERT_COLOR_MAP[item.type].historyRow}`}
+                                className={`bus-alert-history-item flex items-center justify-between rounded-lg border px-3 py-2 ${ALERT_COLOR_MAP[item.type].historyRow}`}
                             >
                                 <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                                     <img

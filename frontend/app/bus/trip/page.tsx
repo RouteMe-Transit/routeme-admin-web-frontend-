@@ -131,9 +131,9 @@ export default function DriverSchedulePage() {
     <section className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
       
       {/* LEFT SIDE - TABLE */}
-      <div className="lg:col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+      <div className="bus-trip-table-wrap lg:col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         
-        <div className="border-b border-slate-200 bg-linear-to-r from-slate-50 to-white px-4 py-3.5">
+        <div className="bus-trip-header border-b border-slate-200 bg-linear-to-r from-slate-50 to-white px-4 py-3.5">
           <h2 className="text-base font-semibold text-slate-800">
             Bus NA-1876 — Active Schedule
           </h2>
@@ -171,7 +171,7 @@ export default function DriverSchedulePage() {
               {trips.map((trip, index) => (
                 <tr
                   key={trip.id}
-                  className={`border-b border-slate-100 transition-colors hover:bg-sky-50/70 ${
+                  className={`bus-trip-row border-b border-slate-100 transition-colors hover:bg-sky-50/70 ${
                     index % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                   }`}
                 >
@@ -180,7 +180,7 @@ export default function DriverSchedulePage() {
                       {String(index + 1).padStart(2, "0")}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium text-slate-800">
+                  <td className="bus-trip-direction px-4 py-3 font-medium text-slate-800">
                     {trip.direction}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{trip.departure}</td>
@@ -213,7 +213,7 @@ export default function DriverSchedulePage() {
       </div>
 
       {/* RIGHT SIDE - STOP TIMELINE */}
-      <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm lg:justify-self-end lg:w-full lg:max-w-100.5">
+      <div className="bus-trip-timeline rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm lg:justify-self-end lg:w-full lg:max-w-100.5">
         
         <h3 className="mb-2 text-xs font-semibold text-slate-800">
           Stop Sequence

@@ -1,10 +1,14 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { CgClose } from "react-icons/cg";
 import { IoMdAdd } from "react-icons/io";
 import { MdDelete } from "react-icons/md";
 import { IoEye } from "react-icons/io5";
+import { usePassengerTheme } from "../PassengerThemeContext";
+import ProfileHeader from "../../components/profile/ProfileHeader";
+import ProfileActionList, { type ProfileActionItem } from "../../components/profile/ProfileActionList";
 
 type FavoriteRoute = {
     id: number;
@@ -20,6 +24,8 @@ type FeedbackItem = {
 
 
 export default function PassengerProfilePage() {
+    const router = useRouter();
+    const { isDarkMode, toggleTheme } = usePassengerTheme();
     const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem | null>(null);
     const [view, setView] = useState<"profile" | "favorites" | "addRoute" | "feedback" | "editProfile" | "changePassword">("profile");
 
@@ -140,6 +146,49 @@ export default function PassengerProfilePage() {
         setPasswordData({ newPassword: "", confirmPassword: "", oldPassword: "" });
         setView("profile");
     };
+
+    const handleSignOut = () => {
+        toast.success("Signed out successfully");
+        router.push("/login");
+    };
+
+    const profileActionItems: ProfileActionItem[] = [
+        {
+            id: "edit-profile",
+            label: "Edit Profile",
+            iconSrc: "/icons/user1.svg",
+            iconAlt: "Edit",
+            onClick: () => setView("editProfile"),
+        },
+        {
+            id: "change-password",
+            label: "Change Password",
+            iconSrc: "/icons/lock.svg",
+            iconAlt: "Change Password",
+            onClick: () => setView("changePassword"),
+        },
+        {
+            id: "language",
+            label: "Language",
+            iconSrc: "/icons/globe.svg",
+            iconAlt: "Language",
+        },
+        {
+            id: "toggle-theme",
+            label: isDarkMode ? "Light Mode" : "Dark Mode",
+            iconSrc: isDarkMode ? "/icons/sun.svg" : "/icons/moon.svg",
+            iconAlt: isDarkMode ? "Light Mode" : "Dark Mode",
+            onClick: toggleTheme,
+        },
+        {
+            id: "sign-out",
+            label: "Sign Out",
+            iconSrc: "/icons/signout.svg",
+            iconAlt: "Sign Out",
+            onClick: handleSignOut,
+            danger: true,
+        },
+    ];
     type FeedbackItem = {
         id: number;
         category: string;
@@ -153,12 +202,12 @@ export default function PassengerProfilePage() {
 
     return (
         <section className="">
-            <div className="bg-[#1228430F] w-full h-72.5 border-b border-gray-300 shadow-sm flex justify-center flex-col items-center">
-                <img src={user.image} alt="Profile" className="w-30 h-30 rounded-full border border-gray-300 mt-10" />
-                <h1 className="text-xl font-bold text-gray-800 ml-4 mt-5">{user.firstName} {user.lastName}</h1>
-                <h3>Passenger</h3>
-
-            </div>
+            <ProfileHeader
+                firstName={user.firstName}
+                lastName={user.lastName}
+                image={user.image}
+                role="Passenger"
+            />
 
             <div className="flex gap-4 mt-6 justify-center">
                 <button className="w-27.5 h-14.25 bg-white rounded-md text-[#4CAF8A] font-bold text-md hover:bg-gray-200 " onClick={() => setView("favorites")}>
@@ -169,28 +218,7 @@ export default function PassengerProfilePage() {
                 </button>
             </div>
 
-            <div className="flex flex-col items-center mt-10 ">
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-t-md border-b border-gray-300 hover:bg-gray-200"
-                    onClick={() => setView("editProfile")}>
-                    <img src="/icons/user1.svg" alt="Edit" className="inline-block w-8 h-8 mr-5" />
-                    Edit Profile
-                </button>
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 border-b border-gray-300 hover:bg-gray-200"
-                    onClick={() => setView("changePassword")}
-                >
-                    <img src="/icons/lock.svg" alt="Change Password" className="inline-block w-8 h-8 mr-5" />
-                    Change Password
-                </button>
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 border-b border-gray-300 hover:bg-gray-200">
-                    <img src="/icons/globe.svg" alt="Language" className="inline-block w-8 h-8 mr-5" />
-                    Language
-                </button>
-                <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-b-md hover:bg-gray-200">
-                    <img src="/icons/moon.svg" alt="Dark Mode" className="inline-block w-8 h-8 mr-5" />
-                    Dark Mode
-                </button>
-
-            </div>
+            <ProfileActionList items={profileActionItems} />
 
             {view === "favorites" && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
