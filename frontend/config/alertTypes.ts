@@ -1,4 +1,5 @@
 // This file defines the alert types and their associated styles for the application. It includes a list of alert types, a mapping of alert types to their corresponding badge and card styles, and a mapping of alert types to their display labels.
+//shared by both admin and bus driver interfaces. so stay in config folder.
 export const ALERT_TYPE_OPTIONS = [
 	{ value: "Service-Distruption", label: "Service Distruption" },
 	{ value: "Road-Block", label: "Road Block" },

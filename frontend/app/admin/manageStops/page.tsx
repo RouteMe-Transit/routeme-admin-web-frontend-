@@ -285,101 +285,84 @@ export default function AdminManageStopsPage() {
                 />
             </div>
 
-            <div className="bg-white rounded shadow overflow-x-auto mt-2">
-                <table className="w-full border-collapse">
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                <div className="grid grid-cols-7 bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-600 border-b uppercase tracking-wide">
+                    <div>Stop ID</div>
+                    <div>Stop Name</div>
+                    <div>Longitude</div>
+                    <div>Latitude</div>
+                    <div>Status</div>
+                    <div>Map</div>
+                    <div className="text-center">Action</div>
+                </div>
 
-                    {/* Header */}
-                    <thead className="bg-[#122843] text-white">
-                        <tr>
-                            <th className="p-3 text-left">Stop ID</th>
-                            <th className="p-3 text-left">Stop Name</th>
-                            <th className="p-3 text-left">Longitude</th>
-                            <th className="p-3 text-left">Latitude</th>
-                            <th className="p-3 text-left">Status</th>
-                            <th className="p-3 text-left">Map</th>
-                            <th className="p-3 text-left">Actions</th>
-                        </tr>
-                    </thead>
+                {filteredStops.length > 0 ? (
+                    filteredStops.map((stop, index) => {
+                        const stopCode = `S${String(index + 1).padStart(2, "0")}`;
 
-                    {/* Body */}
-                    <tbody>
-                        {filteredStops.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} className="text-center p-4 text-gray-500">
-                                    No stops added yet
-                                </td>
-                            </tr>
-                        ) : (
-                            filteredStops.map((stop, index) => {
-                                const stopCode = `S${String(index + 1).padStart(2, "0")}`;
+                        return (
+                            <div
+                                key={stop.id}
+                                className="grid grid-cols-7 items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition"
+                            >
+                                <div className="font-semibold">
+                                    <span className="bg-[#122843] text-white px-2 py-1 rounded text-sm">
+                                        {stopCode}
+                                    </span>
+                                </div>
 
-                                return (
-                                    <tr
-                                        key={stop.id}
-                                        className={`${index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                                            } hover:bg-blue-50`}
+                                <div className="font-medium text-gray-600">{stop.name}</div>
+                                <div>{stop.longitude}</div>
+                                <div>{stop.latitude}</div>
+
+                                <div>
+                                    <span
+                                        className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${stop.isActive
+                                            ? "bg-[#61de9f] text-[#00796b]"
+                                            : "bg-red-100 text-red-600"
+                                        }`}
                                     >
-                                        <td className="p-3">
-                                            <span className="bg-[#122843] text-white px-2 py-1 rounded text-sm">
-                                                {stopCode}
-                                            </span>
-                                        </td>
+                                        {stop.isActive ? "Active" : "Deactive"}
+                                    </span>
+                                </div>
 
-                                        <td className="p-3">{stop.name}</td>
-                                        <td className="p-3">{stop.longitude}</td>
-                                        <td className="p-3">{stop.latitude}</td>
+                                <div>
+                                    <a
+                                        href={`https://www.google.com/maps?q=${stop.latitude},${stop.longitude}`}
+                                        target="_blank"
+                                        className="font-semibold text-[#1d9e75] hover:underline"
+                                    >
+                                        View
+                                    </a>
+                                </div>
 
-                                        <td className="p-3">
-                                            <span
-                                                className={`px-2 py-1 rounded text-xs font-semibold ${stop.isActive
-                                                        ? "bg-green-100 text-green-700"
-                                                        : "bg-red-100 text-red-700"
-                                                    }`}
-                                            >
-                                                {stop.isActive ? "Active" : "Deactive"}
-                                            </span>
-                                        </td>
+                                <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                        onClick={() => handleEdit(stop)}
+                                        className="w-8 h-8 rounded-full  flex items-center justify-center "
+                                    >
+                                        <AiFillEdit size={18} color="blue" />
+                                    </button>
 
-                                        {/* MAP */}
-                                        <td className="p-3">
-                                            <a
-                                                href={`https://www.google.com/maps?q=${stop.latitude},${stop.longitude}`}
-                                                target="_blank"
-                                                className="text-blue-600 underline"
-                                            >
-                                                View
-                                            </a>
-                                        </td>
-
-                                        {/* ACTIONS */}
-                                        <td className="p-3 flex gap-4">
-                                            <button
-                                                onClick={() => handleEdit(stop)}
-                                                className="px-2 py-1"
-                                            >
-                                                <AiFillEdit size={20} color="blue"/>
-                                            </button>
-
-                                            <button
-                                                onClick={() => handleToggleActive(stop.id)}
-                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${stop.isActive ? "bg-green-600" : "bg-slate-400"
-                                                    }`}
-                                                title={stop.isActive ? "Deactivate stop" : "Activate stop"}
-                                                aria-label={stop.isActive ? "Deactivate stop" : "Activate stop"}
-                                            >
-                                                <span
-                                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${stop.isActive ? "translate-x-6" : "translate-x-1"
-                                                        }`}
-                                                />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })
-                        )}
-                    </tbody>
-
-                </table>
+                                    <button
+                                        onClick={() => handleToggleActive(stop.id)}
+                                        className={`relative inline-flex h-8 w-14 items-center rounded-full border transition-colors ${stop.isActive ? "bg-[#61de9f] border-[#61de9f]" : "bg-slate-200 border-slate-300"
+                                            }`}
+                                        title={stop.isActive ? "Deactivate stop" : "Activate stop"}
+                                        aria-label={stop.isActive ? "Deactivate stop" : "Activate stop"}
+                                    >
+                                        <span
+                                            className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform shadow ${stop.isActive ? "translate-x-7" : "translate-x-1"
+                                                }`}
+                                        />
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="text-center py-20 text-gray-400 text-sm">No stops added yet</div>
+                )}
             </div>
         </section>
     );
