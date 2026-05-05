@@ -30,9 +30,27 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem("token", data.data.token);
-        localStorage.setItem("user", JSON.stringify(data.data.user));
-        window.location.href = "/admin/dashboard";
+
+        const userRole = data.data.user.role;
+
+        console.log("User role:", userRole, 'ujklhj', data.data.user);
+        if (userRole === "admin") {
+          localStorage.setItem("token", data.data.token);
+          localStorage.setItem("user", JSON.stringify(data.data.user));
+          window.location.href = "/admin/dashboard";
+        } else if (userRole === "passenger") {
+          localStorage.setItem("token", data.data.token);
+          localStorage.setItem("user", JSON.stringify(data.data.user));
+          window.location.href = "/passenger/liveTracking";
+        } else if (userRole === "bus") {
+          localStorage.setItem("token", data.data.token);
+          localStorage.setItem("user", JSON.stringify(data.data.user));
+          window.location.href = "/bus/trip";
+        } else {
+          window.location.href = "/";
+        }
+
+
       } else {
         alert(`${data.message || "Login failed"}`);
       }

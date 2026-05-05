@@ -1,18 +1,13 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { CgClose } from "react-icons/cg";
-import ProfileHeader from "../../components/profile/ProfileHeader";
-import ProfileActionList, { type ProfileActionItem } from "../../components/profile/ProfileActionList";
-import { useAdminTheme } from "../AdminThemeContext";
 
 
 export default function AdminProfilePage() {
   const router = useRouter();
 
-  const { isDarkMode, toggleTheme } = useAdminTheme();
   const [user, setUser] = useState({
     firstName: "Kavindra",
     lastName: "Senarathne",
@@ -75,57 +70,13 @@ export default function AdminProfilePage() {
           alt="Profile"
           className="w-32 h-32 rounded-full border border-gray-300 mt-10 object-cover"
         />
-const handleSignOut = () => {
-  toast.success("Signed out successfully");
-  router.push("/login");
-};
 
-const profileActionItems: ProfileActionItem[] = [
-  {
-    id: "edit-profile",
-    label: "Edit Profile",
-    iconSrc: "/icons/user1.svg",
-    iconAlt: "Edit",
-    onClick: () => setView("editProfile"),
-  },
-  {
-    id: "change-password",
-    label: "Change Password",
-    iconSrc: "/icons/lock.svg",
-    iconAlt: "Change Password",
-    onClick: () => setView("changePassword"),
-  },
-  {
-    id: "language",
-    label: "Language",
-    iconSrc: "/icons/globe.svg",
-    iconAlt: "Language",
-  },
-  {
-    id: "toggle-theme",
-    label: isDarkMode ? "Light Mode" : "Dark Mode",
-    iconSrc: isDarkMode ? "/icons/sun.svg" : "/icons/moon.svg",
-    iconAlt: isDarkMode ? "Light Mode" : "Dark Mode",
-    onClick: toggleTheme,
-  },
-  {
-    id: "sign-out",
-    label: "Sign Out",
-    iconSrc: "/icons/signout.svg",
-    iconAlt: "Sign Out",
-    onClick: handleSignOut,
-    danger: true,
-  },
-];
+        <h1 className="text-xl font-bold text-gray-800 mt-5">
+          {user.firstName} {user.lastName}
+        </h1>
 
-  return (
-    <section className="space-y-2">
-      <ProfileHeader
-        firstName={user.firstName}
-        lastName={user.lastName}
-        image={user.image}
-        role="Admin"
-      />
+        <h3 className="text-gray-500">Admin</h3>
+      </div>
 
       <div className="flex flex-col items-center mt-10 gap-0">
         <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-t-md border-b border-gray-300 hover:bg-gray-200"
@@ -169,7 +120,6 @@ const profileActionItems: ProfileActionItem[] = [
                 <CgClose size={16} color="white" />
               </button>
             </div>
-      <ProfileActionList items={profileActionItems} className="flex flex-col items-center mt-10 gap-0" />
 
             {/* Form */}
             <div className="space-y-3  justify-center flex flex-col ">
