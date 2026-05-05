@@ -6,6 +6,7 @@ import { topbarConfig } from "@/app/components/topBar/topbarConfig";
 import TopBar from "@/app/components/topBar/Topbar";
 import { usePathname } from "next/navigation";
 import { BusThemeProvider, useBusTheme } from "./BusThemeContext";
+import AuthGuard from "./AuthGuard";
 
 type BusLayoutProps = {
 	children: ReactNode;
@@ -32,9 +33,11 @@ const defaultBusInfo: BusInfo = {
 
 export default function BusLayout({ children }: BusLayoutProps) {
 	return (
-		<BusThemeProvider>
-			<BusLayoutContent>{children}</BusLayoutContent>
-		</BusThemeProvider>
+		<AuthGuard>
+			<BusThemeProvider>
+				<BusLayoutContent>{children}</BusLayoutContent>
+			</BusThemeProvider>
+		</AuthGuard>
 	);
 }
 

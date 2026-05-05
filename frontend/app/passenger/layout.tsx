@@ -8,6 +8,7 @@ import {
 	PassengerThemeProvider,
 	usePassengerTheme,
 } from "./PassengerThemeContext";
+import AuthGuard from "./AuthGuard";
 
 type PassengerLayoutProps = {
 	children: ReactNode;
@@ -20,9 +21,11 @@ type TopbarItem = {
 
 export default function PassengerLayout({ children }: PassengerLayoutProps) {
 	return (
-		<PassengerThemeProvider>
-			<PassengerLayoutContent>{children}</PassengerLayoutContent>
-		</PassengerThemeProvider>
+		<AuthGuard>
+			<PassengerThemeProvider>
+				<PassengerLayoutContent>{children}</PassengerLayoutContent>
+			</PassengerThemeProvider>
+		</AuthGuard>
 	);
 }
 
