@@ -1,5 +1,9 @@
 "use client";
+
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+
 import Sidebar from "../components/sideBar/Sidebar";
 import { topbarConfig } from "@/app/components/topBar/topbarConfig";
 import TopBar from "@/app/components/topBar/Topbar";
@@ -7,11 +11,12 @@ import { usePathname } from "next/navigation";
 import { AdminThemeProvider, useAdminTheme } from "./AdminThemeContext";
 
 type AdminLayoutProps = {
-	children: ReactNode;
+  children: ReactNode;
 };
+
 type TopbarItem = {
-	title: string;
-	icon: ReactNode | null;
+  title: string;
+  icon: ReactNode | null;
 };
 
 export default function AdminLayout({ children }: AdminLayoutProps) {

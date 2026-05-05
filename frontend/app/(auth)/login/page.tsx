@@ -9,17 +9,45 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log({ role, email, password });
-    alert(`${role} logged in!`);
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role,
+          email,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem("token", data.data.token);
+        localStorage.setItem("user", JSON.stringify(data.data.user));
+        window.location.href = "/admin/dashboard";
+      } else {
+        alert(`${data.message || "Login failed"}`);
+      }
+
+    } catch (error) {
+      console.error(error);
+      alert("Cannot connect to backend");
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
       {/* Bigger Card */}
       <div className="bg-white shadow-2xl rounded-2xl p-12 w-full max-w-xl border">
-        
+
         <h1 className="text-3xl font-bold text-center mb-8">
           Login to Your Account
         </h1>
@@ -30,11 +58,10 @@ export default function LoginPage() {
             <button
               key={r}
               onClick={() => setRole(r)}
-              className={`px-5 py-2 rounded-xl text-sm font-medium transition ${
-                role === r
-                  ? "bg-green-500 text-white"
-                  : "bg-gray-200 text-gray-700"
-              }`}
+              className={`px-5 py-2 rounded-xl text-sm font-medium transition ${role === r
+                ? "bg-green-500 text-white"
+                : "bg-gray-200 text-gray-700"
+                }`}
             >
               {r}
             </button>
@@ -80,9 +107,9 @@ export default function LoginPage() {
         {/* Show ONLY for Passenger */}
         {role === "Passenger" && (
           <p className="text-center text-sm mt-6 text-gray-600">
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <a
-              href="/signUp" // 👉 you can change later
+              href="/signUp"
               className="text-green-500 font-semibold hover:underline"
             >
               Sign Up

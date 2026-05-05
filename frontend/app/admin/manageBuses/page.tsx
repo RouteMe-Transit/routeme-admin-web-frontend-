@@ -20,6 +20,13 @@ type Driver = {
   phone: string;
 };
 
+type Driver = {
+  name: string;
+  email: string;
+  phone: string;
+  nic: string;
+};
+
 type Bus = {
   id:          number;
   busId:       string;
@@ -476,6 +483,166 @@ export default function AdminManageBuses() {
                   {STATUS_OPTIONS.map((o) => <option key={o}>{o}</option>)}
                 </select>
               </div>
+
+              {/* Owner NIC */}
+              <div className="col-span-2">
+                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1">Bus Owner NIC</label>
+                <input
+                  className="w-full h-10 border rounded-lg px-3 text-sm outline-none focus:border-[#4CAF8A]"
+                  placeholder="e.g. 199012345678 or 901234567V"
+                  value={form.ownerNic}
+                  onChange={(e) => setForm({ ...form, ownerNic: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Driver Contact Details */}
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-[10px] uppercase font-black text-gray-400 tracking-wider">
+                  Driver Contact Details
+                  <span className="ml-2 text-gray-300 font-normal normal-case">({form.drivers.length}/3)</span>
+                </label>
+                {form.drivers.length < 3 && (
+                  <button
+                    type="button"
+                    onClick={addDriver}
+                    className="text-xs font-bold text-[#4CAF8A] hover:text-[#3d9e7a] flex items-center gap-1 transition"
+                  >
+                    + Add Driver
+                  </button>
+                )}
+              </div>
+              <div className="space-y-3">
+                {form.drivers.map((driver, index) => (
+                  <div key={index} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] uppercase font-black text-gray-400">Driver {index + 1}</span>
+                      {form.drivers.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeDriver(index)}
+                          className="text-xs text-red-400 hover:text-red-600 font-bold transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block text-[9px] uppercase font-black text-gray-400 mb-1">Name</label>
+                        <input
+                          className="w-full h-9 border rounded-lg px-2.5 text-xs outline-none focus:border-[#4CAF8A] bg-white"
+                          placeholder="A.K. Perera"
+                          value={driver.name}
+                          onChange={(e) => updateDriver(index, "name", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase font-black text-gray-400 mb-1">NIC</label>
+                        <input
+                          className="w-full h-9 border rounded-lg px-2.5 text-xs outline-none focus:border-[#4CAF8A] bg-white"
+                          placeholder="199012345678 or 901234567V"
+                          value={driver.nic}
+                          onChange={(e) => updateDriver(index, "nic", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] uppercase font-black text-gray-400 mb-1">Email</label>
+                        <input
+                          className="w-full h-9 border rounded-lg px-2.5 text-xs outline-none focus:border-[#4CAF8A] bg-white"
+                          placeholder="email@routeme.lk"
+                          value={driver.email}
+                          onChange={(e) => updateDriver(index, "email", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase font-black text-gray-400 mb-1">Phone</label>
+                        <input
+                          className="w-full h-9 border rounded-lg px-2.5 text-xs outline-none focus:border-[#4CAF8A] bg-white"
+                          placeholder="07xxxxxxxx"
+                          maxLength={10}
+                          value={driver.phone}
+                          onChange={(e) => updateDriver(index, "phone", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="mb-2">
+              <label className="block text-[10px] uppercase font-black text-gray-400 mb-2 tracking-wider">Bus Access Password</label>
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setPasswordMode("auto")}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
+                    passwordMode === "auto"
+                      ? "bg-[#122843] text-white border-[#122843]"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  ✨ Auto-Generate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPasswordMode("custom")}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
+                    passwordMode === "custom"
+                      ? "bg-[#122843] text-white border-[#122843]"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  ✏️ Custom Password
+                </button>
+              </div>
+              {passwordMode === "auto" ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-10 border border-dashed border-[#4CAF8A] rounded-lg px-3 flex items-center justify-between bg-green-50">
+                    <span className="text-sm font-mono text-[#122843] font-bold tracking-wider">
+                      {showPassword ? autoPassword : "•".repeat(autoPassword.length)}
+                    </span>
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-gray-400 hover:text-gray-600 text-xs ml-2">
+                      {showPassword ? "🙈" : "👁️"}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAutoPassword(generatePassword())}
+                    className="h-10 px-3 rounded-lg bg-[#4CAF8A] text-white text-xs font-bold hover:bg-[#3d9e7a] transition"
+                    title="Regenerate"
+                  >
+                    🔄
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="w-full h-10 border rounded-lg px-3 pr-10 text-sm focus:border-[#4CAF8A] outline-none"
+                    value={customPassword}
+                    onChange={(e) => setCustomPassword(e.target.value)}
+                    placeholder="Min. 8 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? "🙈" : "👁️"}
+                  </button>
+                </div>
+              )}
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                {passwordMode === "auto"
+                  ? "A secure password has been generated. Share it with the assigned drivers."
+                  : "Enter a strong password with at least 8 characters."}
+              </p>
             </div>
 
             {/* ── Bus Owner Contact ── */}

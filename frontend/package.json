@@ -2,7 +2,13 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0 <24"
+  },
   "scripts": {
+    "predev": "node scripts/check-node-version.cjs",
+    "prebuild": "node scripts/check-node-version.cjs",
+    "prestart": "node scripts/check-node-version.cjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

@@ -22,8 +22,7 @@ export default function SignupPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (form.password !== form.confirmPassword) {
@@ -32,16 +31,37 @@ export default function SignupPage() {
     }
 
     setError("");
-    console.log(form);
 
-    // 👉 Later connect API here
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-    setShowSuccess(true);
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log(data);
+        setShowSuccess(true); 
+        alert("Signup successful!");
+      } else {
+        alert(data.message || "Signup failed");
+      }
+
+    } catch (error) {
+      console.error(error);
+      alert("Cannot connect to backend");
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      
+
       {/* Signup Card */}
       <div className="bg-white shadow-xl rounded-2xl p-10 w-full max-w-lg border">
         <h1 className="text-3xl font-bold text-center mb-2">
@@ -52,7 +72,7 @@ export default function SignupPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          
+
           {/* First + Last Name */}
           <div className="flex gap-4">
             <input
@@ -140,7 +160,7 @@ export default function SignupPage() {
       {showSuccess && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/40">
           <div className="bg-white p-10 rounded-2xl shadow-xl text-center w-[350px]">
-            
+
             <h2 className="text-2xl font-bold mb-4">
               Account Created Successfully!
             </h2>
