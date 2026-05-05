@@ -101,7 +101,7 @@ export default function AdminFeedback() {
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
 
         {/* HEADER (FIXED ALIGNMENT) */}
-        <div className="grid grid-cols-8 bg-gray-50 p-4 text-sm font-semibold">
+        <div className="grid grid-cols-8 bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-600 border-b uppercase tracking-wide">
           <div className="col-span-2">Name</div>
           <div>Bus</div>
           <div>Category</div>

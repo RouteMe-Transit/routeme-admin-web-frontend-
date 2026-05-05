@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -46,17 +47,29 @@ function generatePassword() {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
+// Mask NIC: show first 4 chars and last 1, hide the rest
+function maskNic(nic: string): string {
+  if (!nic || nic.length < 6) return nic;
+  const visible = 4;
+  const tail = 1;
+  return nic.slice(0, visible) + "•".repeat(nic.length - visible - tail) + nic.slice(-tail);
+}
+
 // Sri Lanka NIC: old format 9 digits + V/X, or new format 12 digits
 const nicRegex = /^([0-9]{9}[VvXx]|[0-9]{12})$/;
 
+// First name + last name format: e.g. "Kavinga Jayawardane", "Mohomad Fazil"
+// Supports 2–4 words, each starting with a capital letter
+const nameRegex = /^[A-Z][a-z]+(\s[A-Z][a-z]+){1,3}$/;
+
 const initialUsers: User[] = [
-  { userId: "PSG0001", id: 0,  name: "K. Jayawardane",   email: "kavindra1@gmail.com",        phone: "0771234501", nic: "200112345670", joined: "Jan 2026", status: "Active",    role: "Passenger" },
-  { userId: "PSG0002", id: 1,  name: "T.D. Fernando",    email: "tiranfernando@gmail.com",     phone: "0712345602", nic: "199834567891", joined: "Jan 2026", status: "Active",    role: "Passenger" },
-  { userId: "PSG0003", id: 2,  name: "O.A. Athuraliya",  email: "ottara253@gmail.com",         phone: "0763456703", nic: "200223456782", joined: "Feb 2026", status: "Active",    role: "Passenger" },
-  { userId: "PSG0004", id: 3,  name: "W.D. Ashley",      email: "ashley2002@gmail.com",        phone: "0704567804", nic: "200345678903", joined: "Feb 2026", status: "Active",    role: "Passenger" },
-  { userId: "ADM0001", id: 12, name: "S.D. Dissanayake", email: "darshana5@routeme.lk",        phone: "0772459001", nic: "198812345678", joined: "Jan 2026", status: "Active",    role: "Admin", password: "Admin@2026!"   },
-  { userId: "ADM0002", id: 13, name: "Y.M. Chanaka",     email: "chanakayasas@routeme.lk",     phone: "0720865902", nic: "199034567890", joined: "Jan 2026", status: "Active",    role: "Admin", password: "Chanaka#7890"  },
-  { userId: "ADM0003", id: 14, name: "T. Ranasinghe",    email: "tatiana55@routeme.lk",        phone: "0778763433", nic: "197545678901", joined: "Feb 2026", status: "Active",    role: "Admin", password: "Michelle$321"  },
+  { userId: "PSG0001", id: 0,  name: "Mohomad Fazil",       email: "passenger1@example.com", phone: "0700000001", joined: "Jan 2026", status: "Active", role: "Passenger" },
+  { userId: "PSG0002", id: 1,  name: "Shashika Jayawardane", email: "passenger2@example.com", phone: "0700000002", joined: "Jan 2026", status: "Active", role: "Passenger" },
+  { userId: "PSG0003", id: 2,  name: "Pahasara Dewmini",    email: "passenger3@example.com", phone: "0700000003", joined: "Feb 2026", status: "Active", role: "Passenger" },
+  { userId: "PSG0004", id: 3,  name: "Minesh Silva",        email: "passenger4@example.com", phone: "0700000004", joined: "Feb 2026", status: "Active", role: "Passenger" },
+  { userId: "ADM0001", id: 12, name: "Oshada Fernando",     email: "admin1@routeme.lk",       phone: "0700000005", nic: "000000001V", joined: "Jan 2026", status: "Active", role: "Admin", password: "PLACEHOLDER_PASSWORD" }, // DUMMY — replace with real data from backend
+  { userId: "ADM0002", id: 13, name: "Ishini Liyanage",     email: "admin2@routeme.lk",       phone: "0700000006", nic: "000000002V", joined: "Jan 2026", status: "Active", role: "Admin", password: "PLACEHOLDER_PASSWORD" }, // DUMMY — replace with real data from backend
+  { userId: "ADM0003", id: 14, name: "Tiran Dissanayake", email: "admin3@routeme.lk",       phone: "0700000007", nic: "000000003V", joined: "Feb 2026", status: "Active", role: "Admin", password: "PLACEHOLDER_PASSWORD" }, // DUMMY — replace with real data from backend
 ];
 
 const STATUS_STYLES: Record<UserStatus, string> = {
@@ -80,8 +93,13 @@ export default function AdminUsers() {
   const [passwordMode, setPasswordMode] = useState<"auto" | "custom">("auto");
   const [autoPassword, setAutoPassword] = useState("");
   const [customPassword, setCustomPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [formError, setFormError]       = useState("");
+
+  // ── Separate visibility toggles for modal vs view panel
+  const [showModalPassword, setShowModalPassword] = useState(false);
+  const [showViewPassword, setShowViewPassword]   = useState(false);
+  const [showViewNic, setShowViewNic]             = useState(false);
+
+  const [formError, setFormError] = useState("");
 
   const totalPassengers = users.filter((u) => u.role === "Passenger").length;
   const totalAdmins     = users.filter((u) => u.role === "Admin").length;
@@ -102,7 +120,7 @@ export default function AdminUsers() {
     setAutoPassword(generatePassword());
     setCustomPassword("");
     setPasswordMode("auto");
-    setShowPassword(false);
+    setShowModalPassword(false);
     setFormError("");
     setShowModal(true);
   };
@@ -114,9 +132,15 @@ export default function AdminUsers() {
     setAutoPassword(user.password || generatePassword());
     setCustomPassword(user.password || "");
     setPasswordMode("auto");
-    setShowPassword(false);
+    setShowModalPassword(false);
     setFormError("");
     setShowModal(true);
+  };
+
+  const openViewModal = (user: User) => {
+    setViewUser(user);
+    setShowViewPassword(false);
+    setShowViewNic(false);
   };
 
   const handleSave = () => {
@@ -136,11 +160,10 @@ export default function AdminUsers() {
     if (!phoneRegex.test(form.phone)) {
       setFormError("Format Error: Phone must be 10 digits starting with 07."); return;
     }
-    // NIC required for all roles
-    if (!form.nic.trim()) {
-      setFormError("NIC is required."); return;
+    if (modalRole === "Admin" && !form.nic.trim()) {
+      setFormError("NIC is required for Admin accounts."); return;
     }
-    if (!nicRegex.test(form.nic.trim())) {
+    if (modalRole === "Admin" && !nicRegex.test(form.nic.trim())) {
       setFormError("Format Error: Enter a valid Sri Lankan NIC (e.g., 199012345678 or 901234567V)."); return;
     }
     if (modalRole === "Admin" && passwordMode === "custom" && customPassword.length < 8) {
@@ -154,12 +177,7 @@ export default function AdminUsers() {
     if (editingUser) {
       setUsers((prev) => prev.map((u) =>
         u.id === editingUser.id
-          ? {
-              ...u,
-              ...form,
-              nic: form.nic,
-              ...(modalRole === "Admin" ? { password: finalPassword } : {}),
-            }
+          ? { ...u, ...form, nic: form.nic, ...(modalRole === "Admin" ? { password: finalPassword } : {}) }
           : u
       ));
     } else {
@@ -274,7 +292,6 @@ export default function AdminUsers() {
             </button>
           ))}
         </div>
-
         <div className="ml-auto">
           <button
             onClick={() => openAddModal(activeTab)}
@@ -310,26 +327,22 @@ export default function AdminUsers() {
               style={{ gridTemplateColumns: COL_TEMPLATE }}
             >
               <div className="text-gray-700 text-sm">{user.userId}</div>
-
               <div className="flex items-center gap-2 min-w-0">
                 <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ${getAvatarColor(user.id)}`}>
                   {getInitial(user.name)}
                 </div>
                 <span className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{user.name}</span>
               </div>
-
               <div className="text-gray-500 truncate pr-2">{user.email}</div>
               <div className="text-gray-700">{user.phone}</div>
               <div className="text-gray-700">{user.joined}</div>
-
               <div>
                 <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${STATUS_STYLES[user.status]}`}>
                   {user.status}
                 </span>
               </div>
-
               <div className="flex items-center justify-center gap-1.5">
-                <button onClick={() => setViewUser(user)} className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition">
+                <button onClick={() => openViewModal(user)} className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition">
                   <img src="/icons/view.png" className="w-5 h-5" />
                 </button>
                 <button onClick={() => openEditModal(user)} className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center hover:bg-amber-100 transition">
@@ -378,7 +391,7 @@ export default function AdminUsers() {
                   className="w-full h-10 border rounded-lg px-3 text-sm focus:border-[#4CAF8A] outline-none"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. K.D. Senarathne"
+                  placeholder="e.g. Kavindra Senarathne"
                 />
               </div>
               <div>
@@ -401,18 +414,20 @@ export default function AdminUsers() {
                 />
               </div>
 
-              {/* NIC — shown for all roles */}
-              <div>
-                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-wider">NIC Number</label>
-                <input
-                  className="w-full h-10 border rounded-lg px-3 text-sm focus:border-[#4CAF8A] outline-none"
-                  value={form.nic}
-                  onChange={(e) => setForm({ ...form, nic: e.target.value })}
-                  placeholder="e.g. 199012345678 or 901234567V"
-                />
-              </div>
+              {/* NIC — Admin only */}
+              {modalRole === "Admin" && (
+                <div>
+                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-wider">NIC Number</label>
+                  <input
+                    className="w-full h-10 border rounded-lg px-3 text-sm focus:border-[#4CAF8A] outline-none"
+                    value={form.nic}
+                    onChange={(e) => setForm({ ...form, nic: e.target.value })}
+                    placeholder="e.g. 199012345678 or 901234567V"
+                  />
+                </div>
+              )}
 
-              {/* PASSWORD — only shown for Admin */}
+              {/* PASSWORD — Admin only */}
               {modalRole === "Admin" && (
                 <div>
                   <label className="block text-[10px] uppercase font-black text-gray-400 mb-2 tracking-wider">Password</label>
@@ -441,10 +456,10 @@ export default function AdminUsers() {
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-10 border border-dashed border-[#4CAF8A] rounded-lg px-3 flex items-center justify-between bg-green-50">
                         <span className="text-sm font-mono text-[#122843] font-bold tracking-wider">
-                          {showPassword ? autoPassword : "•".repeat(autoPassword.length)}
+                          {showModalPassword ? autoPassword : "•".repeat(autoPassword.length)}
                         </span>
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-gray-400 hover:text-gray-600 text-xs ml-2">
-                          {showPassword ? "🙈" : "👁️"}
+                        <button type="button" onClick={() => setShowModalPassword(!showModalPassword)} className="text-gray-400 hover:text-gray-600 text-xs ml-2">
+                          {showModalPassword ? "🙈" : "👁️"}
                         </button>
                       </div>
                       <button
@@ -459,7 +474,7 @@ export default function AdminUsers() {
                   ) : (
                     <div className="relative">
                       <input
-                        type={showPassword ? "text" : "password"}
+                        type={showModalPassword ? "text" : "password"}
                         className="w-full h-10 border rounded-lg px-3 pr-10 text-sm focus:border-[#4CAF8A] outline-none"
                         value={customPassword}
                         onChange={(e) => setCustomPassword(e.target.value)}
@@ -467,10 +482,10 @@ export default function AdminUsers() {
                       />
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
+                        onClick={() => setShowModalPassword(!showModalPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       >
-                        {showPassword ? "🙈" : "👁️"}
+                        {showModalPassword ? "🙈" : "👁️"}
                       </button>
                     </div>
                   )}
@@ -522,29 +537,40 @@ export default function AdminUsers() {
                 <p className="text-[10px] uppercase font-black text-gray-400 mb-1">Phone</p>
                 <p className="font-bold text-gray-800">{viewUser.phone}</p>
               </div>
-              {viewUser.nic && (
+
+              {viewUser.role === "Admin" && viewUser.nic && (
                 <div>
                   <p className="text-[10px] uppercase font-black text-gray-400 mb-1">NIC Number</p>
-                  <p className="font-bold text-gray-800">{viewUser.nic}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono font-bold text-gray-800 tracking-wider">
+                      {showViewNic ? viewUser.nic : maskNic(viewUser.nic)}
+                    </p>
+                    <button type="button" onClick={() => setShowViewNic(!showViewNic)} className="text-gray-400 hover:text-gray-600 text-sm">
+                      {showViewNic ? "🙈" : "👁️"}
+                    </button>
+                  </div>
                 </div>
               )}
+
               <div>
                 <p className="text-[10px] uppercase font-black text-gray-400 mb-1">System Role</p>
                 <p className="font-bold text-gray-800">{viewUser.role}</p>
               </div>
+
               {viewUser.role === "Admin" && viewUser.password && (
                 <div>
                   <p className="text-[10px] uppercase font-black text-gray-400 mb-1">Password</p>
                   <div className="flex items-center gap-2">
                     <p className="font-mono font-bold text-gray-800 tracking-wider">
-                      {showPassword ? viewUser.password : "•".repeat(viewUser.password.length)}
+                      {showViewPassword ? viewUser.password : "•".repeat(viewUser.password.length)}
                     </p>
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-gray-400 hover:text-gray-600 text-sm">
-                      {showPassword ? "🙈" : "👁️"}
+                    <button type="button" onClick={() => setShowViewPassword(!showViewPassword)} className="text-gray-400 hover:text-gray-600 text-sm">
+                      {showViewPassword ? "🙈" : "👁️"}
                     </button>
                   </div>
                 </div>
               )}
+
               <div className="pt-4 border-t border-gray-200">
                 <p className="text-[10px] uppercase font-black text-gray-400 mb-2">Account Status</p>
                 <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm ${STATUS_STYLES[viewUser.status]}`}>
