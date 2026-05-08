@@ -2,9 +2,13 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Use Node.js 22 LTS for local development. This project expects Node.js `>=20.9.0 <24`.
+
 First, run the development server:
 
 ```bash
+nvm use
+# or switch to Node 22 manually, then:
 npm run dev
 # or
 yarn dev

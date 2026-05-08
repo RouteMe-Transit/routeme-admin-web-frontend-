@@ -144,14 +144,15 @@ export default function AdminUsers() {
   };
 
   const handleSave = () => {
+    const nameRegex  = /^([A-Z]\.\s?)+[A-Z][a-z]+(\s[A-Z][a-z]+)*$/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const phoneRegex = /^07[0-9]{8}$/;
 
     if (!form.name || !form.email || !form.phone) {
       setFormError("All fields are mandatory."); return;
     }
-    if (!nameRegex.test(form.name.trim())) {
-      setFormError("Format Error: Name must be like 'Kavinga Jayawardane' — first name and last name, each capitalised."); return;
+    if (!nameRegex.test(form.name)) {
+      setFormError("Format Error: Name must be like 'K.D. Senarathne' — initials followed by a capitalised last name."); return;
     }
     if (!emailRegex.test(form.email)) {
       setFormError("Format Error: Please enter a valid email address."); return;

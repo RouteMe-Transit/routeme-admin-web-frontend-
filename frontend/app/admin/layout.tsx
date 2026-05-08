@@ -1,14 +1,18 @@
 "use client";
+
 import type { ReactNode } from "react";
+
 import Sidebar from "../components/sideBar/Sidebar";
 import { topbarConfig } from "@/app/components/topBar/topbarConfig";
 import TopBar from "@/app/components/topBar/Topbar";
 import { usePathname } from "next/navigation";
 import { AdminThemeProvider, useAdminTheme } from "./AdminThemeContext";
+import AuthGuard from "./AuthGuard";
 
 type AdminLayoutProps = {
 	children: ReactNode;
 };
+
 type TopbarItem = {
 	title: string;
 	icon: ReactNode | null;
@@ -16,9 +20,11 @@ type TopbarItem = {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
 	return (
-		<AdminThemeProvider>
-			<AdminLayoutContent>{children}</AdminLayoutContent>
-		</AdminThemeProvider>
+		<AuthGuard>
+			<AdminThemeProvider>
+				<AdminLayoutContent>{children}</AdminLayoutContent>
+			</AdminThemeProvider>
+		</AuthGuard>
 	);
 }
 
