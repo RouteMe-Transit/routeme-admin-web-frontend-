@@ -1,5 +1,7 @@
 "use client";
 
+import api from "@/app/services/api";
+import axios, { AxiosError } from "axios";
 import React, { useState } from "react";
 
 const roles = ["Passenger", "Driver", "Admin"];
@@ -13,51 +15,40 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          role,
-          email,
-          password,
-        }),
+      const response = await api.post("/auth/login", {
+        role,
+        email,
+        password,
       });
 
-      const data = await response.json();
+      const data = response.data;
 
-      if (response.ok) {
+      const userRole = data.data.user.role;
 
-        const userRole = data.data.user.role;
-
-        console.log("User role:", userRole, 'ujklhj', data.data.user);
-        if (userRole === "admin") {
-          localStorage.setItem("token", data.data.token);
-          localStorage.setItem("user", JSON.stringify(data.data.user));
-          window.location.href = "/admin/dashboard";
-        } else if (userRole === "passenger") {
-          localStorage.setItem("token", data.data.token);
-          localStorage.setItem("user", JSON.stringify(data.data.user));
-          window.location.href = "/passenger/liveTracking";
-        } else if (userRole === "bus") {
-          localStorage.setItem("token", data.data.token);
-          localStorage.setItem("user", JSON.stringify(data.data.user));
-          window.location.href = "/bus/trip";
-        } else {
-          window.location.href = "/";
-        }
-
-
+      console.log("User role:", userRole, "ujklhj", data.data.user);
+      if (userRole === "admin") {
+        localStorage.setItem("token", data.data.token);
+        localStorage.setItem("user", JSON.stringify(data.data.user));
+        window.location.href = "/admin/dashboard";
+      } else if (userRole === "passenger") {
+        localStorage.setItem("token", data.data.token);
+        localStorage.setItem("user", JSON.stringify(data.data.user));
+        window.location.href = "/passenger/liveTracking";
+      } else if (userRole === "bus") {
+        localStorage.setItem("token", data.data.token);
+        localStorage.setItem("user", JSON.stringify(data.data.user));
+        window.location.href = "/bus/trip";
       } else {
-        alert(`${data.message || "Login failed"}`);
+        window.location.href = "/";
       }
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<any>;
 
-    } catch (error) {
-      console.error(error);
-      alert("Cannot connect to backend");
+        alert((axiosError.response?.data as any)?.message || "Login failed");
+      } else {
+        alert("Unexpected error occurred");
+      }
     }
   };
 
@@ -65,7 +56,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-white">
       {/* Bigger Card */}
       <div className="bg-white shadow-2xl rounded-2xl p-12 w-full max-w-xl border">
-
         <h1 className="text-3xl font-bold text-center mb-8">
           Login to Your Account
         </h1>
@@ -76,10 +66,11 @@ export default function LoginPage() {
             <button
               key={r}
               onClick={() => setRole(r)}
-              className={`px-5 py-2 rounded-xl text-sm font-medium transition ${role === r
-                ? "bg-green-500 text-white"
-                : "bg-gray-200 text-gray-700"
-                }`}
+              className={`px-5 py-2 rounded-xl text-sm font-medium transition ${
+                role === r
+                  ? "bg-green-500 text-white"
+                  : "bg-gray-200 text-gray-700"
+              }`}
             >
               {r}
             </button>
@@ -89,9 +80,7 @@ export default function LoginPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Email
-            </label>
+            <label className="block text-sm font-medium mb-1">Email</label>
             <input
               type="email"
               value={email}
@@ -102,9 +91,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Password
-            </label>
+            <label className="block text-sm font-medium mb-1">Password</label>
             <input
               type="password"
               value={password}
@@ -125,7 +112,7 @@ export default function LoginPage() {
         {/* Show ONLY for Passenger */}
         {role === "Passenger" && (
           <p className="text-center text-sm mt-6 text-gray-600">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <a
               href="/signUp"
               className="text-green-500 font-semibold hover:underline"
