@@ -1,364 +1,509 @@
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Swal from "sweetalert2";
+import { z, ZodIssue } from "zod";
+import {
+  IoEye,
+  IoPencil,
+  IoBan,
+  IoTrash,
+  IoSearch,
+  IoPersonAdd,
+  IoCheckmarkCircle,
+} from "react-icons/io5";
+import { FiUsers, FiShield, FiUserX } from "react-icons/fi";
+import { MdVerified } from "react-icons/md";
 
-type UserStatus = "Active" | "Suspended";
-type UserRole = "Passenger" | "Admin";
+// ─── Types ──────────────────────────────────────────────────────────────────
+type UserRole = "admin" | "passenger" | "bus";
 
 type User = {
-  userId: string;
   id: number;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
-  nic?: string;
-  joined: string;
-  status: UserStatus;
   role: UserRole;
-  password?: string;
+  subscribedRoutes: string[];
+  isActive: boolean;
+  createdAt: string;
 };
+
+// ─── Zod Schemas ────────────────────────────────────────────────────────────
+const createAdminSchema = z.object({
+  firstName: z.string().min(1, "First name is required").max(50, "Too long"),
+  lastName:  z.string().min(1, "Last name is required").max(50, "Too long"),
+  email:     z.string().email("Please enter a valid email address"),
+  phone:     z.string().optional(),
+  password:  z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Must contain at least one uppercase letter")
+    .regex(/[0-9]/, "Must contain at least one number"),
+});
+
+const editAdminSchema = z.object({
+  firstName: z.string().min(1, "First name is required").max(50, "Too long"),
+  lastName:  z.string().min(1, "Last name is required").max(50, "Too long"),
+  email:     z.string().email("Please enter a valid email address"),
+  phone:     z.string().optional(),
+  password:  z
+    .string()
+    .refine(
+      (val) => val === "" || val.length >= 8,
+      "Password must be at least 8 characters"
+    )
+    .refine(
+      (val) => val === "" || /[A-Z]/.test(val),
+      "Must contain at least one uppercase letter"
+    )
+    .refine(
+      (val) => val === "" || /[0-9]/.test(val),
+      "Must contain at least one number"
+    ),
+});
+
+type FormValues = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+};
+
+type FieldErrors = Partial<Record<keyof FormValues, string>>;
+
+// ─── API helper ──────────────────────────────────────────────────────────────
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res  = await fetch(`${BASE}${path}`, { ...options, headers });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message ?? "Request failed");
+  return json.data as T;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const getInitials = (f: string, l: string) =>
+  `${f?.[0] ?? ""}${l?.[0] ?? ""}`.toUpperCase();
 
 const AVATAR_COLORS = [
-  "bg-purple-500", "bg-teal-500", "bg-orange-400", "bg-green-500",
-  "bg-red-400", "bg-blue-500", "bg-pink-500", "bg-indigo-500",
-  "bg-yellow-500", "bg-cyan-500",
+  "bg-orange-400","bg-emerald-500","bg-teal-500","bg-blue-500",
+  "bg-violet-500","bg-pink-500","bg-rose-400","bg-indigo-500",
+  "bg-cyan-500","bg-amber-500",
 ];
+const avatarColor = (id: number) => AVATAR_COLORS[id % AVATAR_COLORS.length];
 
-function getInitial(name: string) {
-  return name.trim().charAt(0).toUpperCase();
-}
-
-function getAvatarColor(id: number) {
-  return AVATAR_COLORS[id % AVATAR_COLORS.length];
-}
-
-// PSG0001 for Passenger, ADM0001 for Admin
-function generateUserId(role: UserRole, users: User[]): string {
-  const prefix = role === "Passenger" ? "PSG" : "ADM";
-  const roleUsers = users.filter((u) => u.role === role);
-  const next = roleUsers.length + 1;
-  return `${prefix}${String(next).padStart(4, "0")}`;
-}
-
-function generatePassword() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$!";
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-}
-
-// Mask NIC: show first 4 chars and last 1, hide the rest
-function maskNic(nic: string): string {
-  if (!nic || nic.length < 6) return nic;
-  const visible = 4;
-  const tail = 1;
-  return nic.slice(0, visible) + "•".repeat(nic.length - visible - tail) + nic.slice(-tail);
-}
-
-// Sri Lanka NIC: old format 9 digits + V/X, or new format 12 digits
-const nicRegex = /^([0-9]{9}[VvXx]|[0-9]{12})$/;
-
-// First name + last name format: e.g. "Kavinga Jayawardane", "Mohomad Fazil"
-// Supports 2–4 words, each starting with a capital letter
-const nameRegex = /^[A-Z][a-z]+(\s[A-Z][a-z]+){1,3}$/;
-
-const initialUsers: User[] = [
-  { userId: "PSG0001", id: 0,  name: "Mohomad Fazil",       email: "passenger1@example.com", phone: "0700000001", joined: "Jan 2026", status: "Active", role: "Passenger" },
-  { userId: "PSG0002", id: 1,  name: "Shashika Jayawardane", email: "passenger2@example.com", phone: "0700000002", joined: "Jan 2026", status: "Active", role: "Passenger" },
-  { userId: "PSG0003", id: 2,  name: "Pahasara Dewmini",    email: "passenger3@example.com", phone: "0700000003", joined: "Feb 2026", status: "Active", role: "Passenger" },
-  { userId: "PSG0004", id: 3,  name: "Minesh Silva",        email: "passenger4@example.com", phone: "0700000004", joined: "Feb 2026", status: "Active", role: "Passenger" },
-  { userId: "ADM0001", id: 12, name: "Oshada Fernando",     email: "admin1@routeme.lk",       phone: "0700000005", nic: "000000001V", joined: "Jan 2026", status: "Active", role: "Admin", password: "PLACEHOLDER_PASSWORD" }, // DUMMY — replace with real data from backend
-  { userId: "ADM0002", id: 13, name: "Ishini Liyanage",     email: "admin2@routeme.lk",       phone: "0700000006", nic: "000000002V", joined: "Jan 2026", status: "Active", role: "Admin", password: "PLACEHOLDER_PASSWORD" }, // DUMMY — replace with real data from backend
-  { userId: "ADM0003", id: 14, name: "Tiran Dissanayake", email: "admin3@routeme.lk",       phone: "0700000007", nic: "000000003V", joined: "Feb 2026", status: "Active", role: "Admin", password: "PLACEHOLDER_PASSWORD" }, // DUMMY — replace with real data from backend
-];
-
-const STATUS_STYLES: Record<UserStatus, string> = {
-  Active:    "bg-[#61de9f] text-[#00796b]",
-  Suspended: "bg-red-50 text-red-600",
+const fmtId = (role: UserRole, id: number) => {
+  const p = role === "admin" ? "ADM" : role === "passenger" ? "PAS" : "BUS";
+  return `${p}${String(id).padStart(4, "0")}`;
 };
 
-const COL_TEMPLATE = "0.7fr 1.4fr 2fr 1.1fr 0.8fr 0.9fr 1.3fr";
+const fmtDate = (s: string) =>
+  new Date(s).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 
-export default function AdminUsers() {
-  const [users, setUsers]               = useState<User[]>(initialUsers);
-  const [search, setSearch]             = useState("");
-  const [activeTab, setActiveTab]       = useState<UserRole>("Passenger");
-  const [statusFilter, setStatusFilter] = useState<UserStatus | "All Status">("All Status");
+const emptyForm = (): FormValues => ({
+  firstName: "",
+  lastName:  "",
+  email:     "",
+  phone:     "",
+  password:  "",
+});
 
-  const [showModal, setShowModal]       = useState(false);
-  const [modalRole, setModalRole]       = useState<UserRole>("Passenger");
-  const [editingUser, setEditingUser]   = useState<User | null>(null);
-  const [viewUser, setViewUser]         = useState<User | null>(null);
-  const [form, setForm]                 = useState({ name: "", email: "", phone: "", nic: "" });
-  const [passwordMode, setPasswordMode] = useState<"auto" | "custom">("auto");
-  const [autoPassword, setAutoPassword] = useState("");
-  const [customPassword, setCustomPassword] = useState("");
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function StatCard({
+  icon, bg, value, label, color,
+}: {
+  icon: React.ReactNode;
+  bg: string;
+  value: number;
+  label: string;
+  color: string;
+}) {
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
+      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+        {icon}
+      </div>
+      <div>
+        <p className={`text-3xl font-black tracking-tight ${color}`}>{value}</p>
+        <p className="text-sm text-gray-400 font-semibold mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+}
 
-  // ── Separate visibility toggles for modal vs view panel
-  const [showModalPassword, setShowModalPassword] = useState(false);
-  const [showViewPassword, setShowViewPassword]   = useState(false);
-  const [showViewNic, setShowViewNic]             = useState(false);
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-[11px] text-red-500 font-semibold">{msg}</p>;
+}
 
-  const [formError, setFormError] = useState("");
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const inputBase =
+  "w-full h-10 border rounded-lg px-3 text-sm outline-none transition bg-white";
+const inputNormal = `${inputBase} border-gray-200 focus:border-[#4CAF8A] focus:ring-1 focus:ring-[#4CAF8A]`;
+const inputError  = `${inputBase} border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-300 bg-red-50/30`;
+const labelCls    = "block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-widest";
 
-  const totalPassengers = users.filter((u) => u.role === "Passenger").length;
-  const totalAdmins     = users.filter((u) => u.role === "Admin").length;
-  const totalSuspended  = users.filter((u) => u.status === "Suspended").length;
+// ═══════════════════════════════════════════════════════════════════════════════
+export default function AdminManageUsers() {
+  const [users,       setUsers]       = useState<User[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [activeTab,   setActiveTab]   = useState<"admin" | "passenger">("admin");
+  const [search,      setSearch]      = useState("");
+  const [statusFilter,setStatusFilter]= useState<"All Status" | "active" | "inactive">("All Status");
+  const [showModal,   setShowModal]   = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [viewUser,    setViewUser]    = useState<User | null>(null);
+  const [form,        setForm]        = useState<FormValues>(emptyForm());
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [apiError,    setApiError]    = useState("");
 
+  // ── Load ──────────────────────────────────────────────────────────────────
+  const loadUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await apiFetch<{ total: number; users: User[] }>("/users");
+      setUsers(res.users ?? []);
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load users",
+        text: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  // ── Derived ───────────────────────────────────────────────────────────────
   const filtered = users.filter((u) => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
-                        u.email.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase();
+    const matchSearch =
+      u.firstName?.toLowerCase().includes(q) ||
+      u.lastName?.toLowerCase().includes(q)  ||
+      u.email?.toLowerCase().includes(q);
     const matchTab    = u.role === activeTab;
-    const matchStatus = statusFilter === "All Status" || u.status === statusFilter;
+    const matchStatus =
+      statusFilter === "All Status" ||
+      (statusFilter === "active" ? u.isActive : !u.isActive);
     return matchSearch && matchTab && matchStatus;
   });
 
-  const openAddModal = (role: UserRole) => {
-    setModalRole(role);
+  const passengerCount = users.filter((u) => u.role === "passenger").length;
+  const adminCount     = users.filter((u) => u.role === "admin").length;
+  const suspendedCount = users.filter((u) => !u.isActive).length;
+
+  // ── Modal helpers ─────────────────────────────────────────────────────────
+  const openAdd = () => {
     setEditingUser(null);
-    setForm({ name: "", email: "", phone: "", nic: "" });
-    setAutoPassword(generatePassword());
-    setCustomPassword("");
-    setPasswordMode("auto");
-    setShowModalPassword(false);
-    setFormError("");
+    setForm(emptyForm());
+    setFieldErrors({});
+    setApiError("");
     setShowModal(true);
   };
 
-  const openEditModal = (user: User) => {
-    setModalRole(user.role);
+  const openEdit = (user: User) => {
     setEditingUser(user);
-    setForm({ name: user.name, email: user.email, phone: user.phone, nic: user.nic || "" });
-    setAutoPassword(user.password || generatePassword());
-    setCustomPassword(user.password || "");
-    setPasswordMode("auto");
-    setShowModalPassword(false);
-    setFormError("");
+    setForm({
+      firstName: user.firstName,
+      lastName:  user.lastName,
+      email:     user.email,
+      phone:     user.phone ?? "",
+      password:  "",
+    });
+    setFieldErrors({});
+    setApiError("");
     setShowModal(true);
   };
 
-  const openViewModal = (user: User) => {
-    setViewUser(user);
-    setShowViewPassword(false);
-    setShowViewNic(false);
+  // ── Save with Zod validation ──────────────────────────────────────────────
+  const handleSave = async () => {
+    const schema = editingUser ? editAdminSchema : createAdminSchema;
+    const result = schema.safeParse(form);
+
+    if (!result.success) {
+      const errs: FieldErrors = {};
+      result.error.issues.forEach((e: ZodIssue) => {
+        const field = e.path[0] as keyof FormValues;
+        if (!errs[field]) errs[field] = e.message;
+      });
+      setFieldErrors(errs);
+      return;
+    }
+
+    setFieldErrors({});
+    setApiError("");
+
+    const payload: Record<string, unknown> = {
+      firstName: form.firstName,
+      lastName:  form.lastName,
+      email:     form.email,
+      phone:     form.phone || undefined,
+      role:      editingUser ? editingUser.role : "admin",
+    };
+    if (form.password) payload.password = form.password;
+
+    try {
+      if (editingUser) {
+        await apiFetch(`/users/${editingUser.id}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        Swal.fire({ icon: "success", title: "User Updated", timer: 1500, showConfirmButton: false });
+      } else {
+        await apiFetch("/users", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        Swal.fire({ icon: "success", title: "Admin Created", timer: 1500, showConfirmButton: false });
+      }
+      await loadUsers();
+      setShowModal(false);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Save failed");
+    }
   };
 
-  const handleSave = () => {
-    const nameRegex  = /^([A-Z]\.\s?)+[A-Z][a-z]+(\s[A-Z][a-z]+)*$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^07[0-9]{8}$/;
-
-    if (!form.name || !form.email || !form.phone) {
-      setFormError("All fields are mandatory."); return;
-    }
-    if (!nameRegex.test(form.name)) {
-      setFormError("Format Error: Name must be like 'K.D. Senarathne' — initials followed by a capitalised last name."); return;
-    }
-    if (!emailRegex.test(form.email)) {
-      setFormError("Format Error: Please enter a valid email address."); return;
-    }
-    if (!phoneRegex.test(form.phone)) {
-      setFormError("Format Error: Phone must be 10 digits starting with 07."); return;
-    }
-    if (modalRole === "Admin" && !form.nic.trim()) {
-      setFormError("NIC is required for Admin accounts."); return;
-    }
-    if (modalRole === "Admin" && !nicRegex.test(form.nic.trim())) {
-      setFormError("Format Error: Enter a valid Sri Lankan NIC (e.g., 199012345678 or 901234567V)."); return;
-    }
-    if (modalRole === "Admin" && passwordMode === "custom" && customPassword.length < 8) {
-      setFormError("Password must be at least 8 characters."); return;
-    }
-
-    const finalPassword = modalRole === "Admin"
-      ? (passwordMode === "auto" ? autoPassword : customPassword)
-      : undefined;
-
-    if (editingUser) {
-      setUsers((prev) => prev.map((u) =>
-        u.id === editingUser.id
-          ? { ...u, ...form, nic: form.nic, ...(modalRole === "Admin" ? { password: finalPassword } : {}) }
-          : u
-      ));
-    } else {
-      const newUser: User = {
-        userId: generateUserId(modalRole, users),
-        id: Date.now(),
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        nic: form.nic,
-        joined: new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        status: "Active",
-        role: modalRole,
-        ...(modalRole === "Admin" ? { password: finalPassword } : {}),
-      };
-      setUsers((prev) => [...prev, newUser]);
-      setActiveTab(modalRole);
-    }
-
-    setShowModal(false);
-    setFormError("");
-    Swal.fire({ icon: "success", title: editingUser ? "Details Updated" : "Account Created", timer: 1500, showConfirmButton: false });
-  };
-
-  const handleDelete = async (user: User) => {
-    const result = await Swal.fire({
-      html: `<div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:2px 0">
-               <img src="/icons/delete.png" style="width:30px;height:30px;margin-bottom:5px" alt="delete"/>
-               <p style="color:#374151;font-size:13px;font-weight:700;margin:0">Remove ${user.name}?</p>
-               <p style="color:#9ca3af;font-size:11px;margin:0">${user.email} · Permanent Deletion</p>
-             </div>`,
+  // ── Suspend ───────────────────────────────────────────────────────────────
+  const handleSuspend = async (user: User) => {
+    const confirm = await Swal.fire({
+      title: `Suspend ${user.firstName}?`,
+      text: "Their account will be deactivated.",
+      icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#ef4444",
-      confirmButtonText: "Remove User",
+      confirmButtonText: "Yes, suspend",
     });
-    if (result.isConfirmed) setUsers((prev) => prev.filter((u) => u.id !== user.id));
-  };
-
-  const handleToggleSuspend = async (user: User) => {
-    const isSuspending = user.status === "Active";
-    const result = await Swal.fire({
-      html: `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0">
-               <div style="width:50px;height:50px;background-color:${isSuspending ? "#fff1f2" : "#f0fdf4"};border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:8px">
-                 <span style="font-size:24px;">${isSuspending ? "🚫" : "✅"}</span>
-               </div>
-               <p style="color:#111827;font-size:14px;font-weight:700;margin:0">${isSuspending ? "Suspend" : "Reactivate"} ${user.name}?</p>
-               <p style="color:#6b7280;font-size:12px;margin:0;text-align:center">This will ${isSuspending ? "restrict" : "restore"} access for <b>${user.email}</b></p>
-             </div>`,
-      showCancelButton: true,
-      confirmButtonColor: isSuspending ? "#ef4444" : "#4CAF8A",
-      confirmButtonText: isSuspending ? "Confirm Suspension" : "Reactivate User",
-      width: 320,
-    });
-    if (result.isConfirmed) {
-      setUsers((prev) => prev.map((u) =>
-        u.id === user.id ? { ...u, status: isSuspending ? "Suspended" : "Active" } : u
-      ));
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Status updated", showConfirmButton: false, timer: 2000 });
+    if (!confirm.isConfirmed) return;
+    try {
+      await apiFetch(`/users/${user.id}`, { method: "DELETE" });
+      await loadUsers();
+      Swal.fire({ icon: "success", title: "User suspended", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ icon: "error", title: err instanceof Error ? err.message : "Failed" });
     }
   };
 
+  // ── Reactivate ────────────────────────────────────────────────────────────
+  const handleReactivate = async (user: User) => {
+    const confirm = await Swal.fire({
+      title: `Reactivate ${user.firstName}?`,
+      text: "Their account will be restored and they can log in again.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#10b981",
+      confirmButtonText: "Yes, reactivate",
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await apiFetch(`/users/${user.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ isActive: true }),
+      });
+      await loadUsers();
+      Swal.fire({ icon: "success", title: "User reactivated", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ icon: "error", title: err instanceof Error ? err.message : "Failed" });
+    }
+  };
+
+  const setField = (key: keyof FormValues, val: string) => {
+    setForm((f) => ({ ...f, [key]: val }));
+    if (fieldErrors[key]) setFieldErrors((e) => ({ ...e, [key]: undefined }));
+  };
+
+  // ════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="p-6">
+    <div className="p-6 bg-[#f5f7fa] min-h-full">
 
       {/* ── STATS ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4 border border-gray-100">
-          <img src="/icons/passenger.png" className="w-12 h-12 object-contain" />
-          <div><p className="text-3xl font-extrabold text-black">{totalPassengers}</p><p className="text-[#94a0ae] text-sm">Passengers</p></div>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4 border border-gray-100">
-          <img src="/icons/admin.png" className="w-12 h-12 object-contain" />
-          <div><p className="text-3xl font-extrabold text-black">{totalAdmins}</p><p className="text-[#94a0ae] text-sm">Admins</p></div>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4 border border-gray-100">
-          <img src="/icons/warning.png" className="w-12 h-12 object-contain" />
-          <div><p className="text-3xl font-extrabold text-red-500">{totalSuspended}</p><p className="text-[#94a0ae] text-sm">Suspended</p></div>
-        </div>
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <StatCard icon={<FiUsers   className="w-6 h-6 text-blue-500"  />} bg="bg-blue-50"  value={passengerCount} label="Total Passengers" color="text-blue-600"  />
+        <StatCard icon={<FiShield  className="w-6 h-6 text-amber-500" />} bg="bg-amber-50" value={adminCount}     label="Total Admins"     color="text-amber-600" />
+        <StatCard icon={<FiUserX   className="w-6 h-6 text-red-400"   />} bg="bg-red-50"   value={suspendedCount} label="Suspended Users"  color="text-red-500"   />
       </div>
 
       {/* ── TOOLBAR ── */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex items-center gap-2 bg-white border border-[#828282]/40 rounded-lg px-3 py-2 w-72 shadow-sm">
-          <img src="/icons/lens.png" className="w-5 h-5 opacity-50" />
+        {/* Search */}
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 w-64 shadow-sm">
+          <IoSearch className="w-4 h-4 text-gray-400 flex-shrink-0" />
           <input
             type="text"
-            placeholder="Search by name, email..."
-            className="flex-1 text-sm bg-transparent outline-none text-black"
+            placeholder="Search by name or email…"
+            className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        {/* Status filter */}
         <select
-          className="h-10 border border-[#828282]/40 rounded-lg px-3 bg-white text-sm text-black"
+          className="h-10 border border-gray-200 rounded-xl px-3 bg-white text-sm text-gray-700 shadow-sm outline-none cursor-pointer"
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as any)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
         >
           <option value="All Status">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Suspended">Suspended</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
         </select>
-        <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
-          {(["Passenger", "Admin"] as UserRole[]).map((tab) => (
+
+        {/* Tabs */}
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+          {(["passenger", "admin"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-5 py-1.5 rounded-md text-sm font-semibold transition ${
-                activeTab === tab ? "bg-[#122843] text-white shadow" : "text-gray-500 hover:text-gray-700"
+              className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                activeTab === tab
+                  ? "bg-[#122843] text-white shadow-md"
+                  : "text-gray-500 hover:text-gray-800"
               }`}
             >
-              {tab}
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
-        <div className="ml-auto">
+
+        {/* Add Admin — admin tab only */}
+        {activeTab === "admin" && (
           <button
-            onClick={() => openAddModal(activeTab)}
-            className="h-10 bg-[#e8b84b] text-white font-semibold px-6 rounded-lg hover:bg-[#d4a53e] transition shadow-sm"
+            onClick={openAdd}
+            className="ml-auto h-10 bg-[#f5a623] hover:bg-[#e09510] active:scale-95 text-white font-bold px-5 rounded-xl transition-all shadow-sm text-sm flex items-center gap-2"
           >
-            + Add {activeTab}
+            <IoPersonAdd className="w-4 h-4" />
+            Add Admin
           </button>
-        </div>
+        )}
       </div>
 
       {/* ── TABLE ── */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-        <div
-          className="grid px-4 py-3 bg-[#f5f8fc] border-b text-xs font-extrabold text-gray-600 uppercase tracking-wide"
-          style={{ gridTemplateColumns: COL_TEMPLATE }}
-        >
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+
+        {/* Header */}
+        <div className="grid grid-cols-[110px_180px_220px_130px_90px_100px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
           <div>User ID</div>
-          <div>User</div>
+          <div>Name</div>
           <div>Email</div>
           <div>Phone</div>
           <div>Joined</div>
           <div>Status</div>
-          <div className="text-center">Action</div>
+          <div className="text-center">Actions</div>
         </div>
 
-        {filtered.length === 0 ? (
-          <div className="text-center py-20 text-gray-400 text-sm">No users found.</div>
+        {/* Body */}
+        {loading ? (
+          <div className="flex items-center justify-center py-24 gap-3 text-gray-400">
+            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm font-semibold">Loading users…</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-gray-400 gap-2">
+            <FiUsers className="w-8 h-8 opacity-30" />
+            <p className="text-sm font-semibold">No {activeTab} users found.</p>
+          </div>
         ) : (
-          filtered.map((user) => (
+          filtered.map((user, idx) => (
             <div
               key={user.id}
-              className="grid items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition"
-              style={{ gridTemplateColumns: COL_TEMPLATE }}
+              className={`grid grid-cols-[110px_180px_220px_130px_90px_100px_116px] items-center px-5 py-3.5 border-b transition-colors duration-150 ${
+                idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+              } hover:bg-blue-50/30`}
             >
-              <div className="text-gray-700 text-sm">{user.userId}</div>
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ${getAvatarColor(user.id)}`}>
-                  {getInitial(user.name)}
-                </div>
-                <span className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{user.name}</span>
+              {/* ID */}
+              <div className="font-mono text-[11px] font-bold text-gray-400 tracking-wider">
+                {fmtId(user.role, user.id)}
               </div>
-              <div className="text-gray-500 truncate pr-2">{user.email}</div>
-              <div className="text-gray-700">{user.phone}</div>
-              <div className="text-gray-700">{user.joined}</div>
-              <div>
-                <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${STATUS_STYLES[user.status]}`}>
-                  {user.status}
+
+              {/* Name + avatar */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`w-8 h-8 rounded-full ${avatarColor(user.id)} flex items-center justify-center text-white text-xs font-black flex-shrink-0 shadow-sm ring-2 ring-white`}>
+                  {getInitials(user.firstName, user.lastName)}
+                </div>
+                <span className="font-semibold text-gray-800 truncate text-[13px] leading-snug">
+                  {user.firstName} {user.lastName}
                 </span>
               </div>
+
+              {/* Email */}
+              <div className="text-gray-500 text-xs truncate pr-3 font-medium">
+                {user.email}
+              </div>
+
+              {/* Phone */}
+              <div className="text-gray-500 text-xs font-medium">
+                {user.phone || "—"}
+              </div>
+
+              {/* Joined */}
+              <div className="text-gray-400 text-xs font-semibold">
+                {fmtDate(user.createdAt)}
+              </div>
+
+              {/* Status */}
+              <div>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide ${
+                  user.isActive
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-red-100 text-red-600"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${user.isActive ? "bg-emerald-500" : "bg-red-500"}`} />
+                  {user.isActive ? "Active" : "Inactive"}
+                </span>
+              </div>
+
+              {/* Actions */}
               <div className="flex items-center justify-center gap-1.5">
-                <button onClick={() => openViewModal(user)} className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition">
-                  <img src="/icons/view.png" className="w-5 h-5" />
-                </button>
-                <button onClick={() => openEditModal(user)} className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center hover:bg-amber-100 transition">
-                  <img src="/icons/edit.png" className="w-4 h-4" />
-                </button>
+                {/* View */}
                 <button
-                  onClick={() => handleToggleSuspend(user)}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
-                    user.status === "Active" ? "bg-orange-50 hover:bg-orange-100" : "bg-green-50 hover:bg-green-100"
-                  }`}
+                  onClick={() => setViewUser(user)}
+                  title="View details"
+                  className="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-500 hover:text-blue-700 flex items-center justify-center transition-all active:scale-90"
                 >
-                  <span className="text-base leading-none">{user.status === "Active" ? "🚫" : "✅"}</span>
+                  <IoEye className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(user)} className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition">
-                  <img src="/icons/delete.png" className="w-4 h-4" />
+
+                {/* Edit */}
+                <button
+                  onClick={() => openEdit(user)}
+                  title="Edit user"
+                  className="w-8 h-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-500 hover:text-amber-700 flex items-center justify-center transition-all active:scale-90"
+                >
+                  <IoPencil className="w-3.5 h-3.5" />
                 </button>
+
+                {/* Suspend (active) / Reactivate (inactive) */}
+                {user.isActive ? (
+                  <button
+                    onClick={() => handleSuspend(user)}
+                    title="Suspend user"
+                    className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 flex items-center justify-center transition-all active:scale-90"
+                  >
+                    <IoBan className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleReactivate(user)}
+                    title="Reactivate user"
+                    className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-500 hover:text-emerald-700 flex items-center justify-center transition-all active:scale-90"
+                  >
+                    <IoCheckmarkCircle className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))
@@ -368,140 +513,116 @@ export default function AdminUsers() {
       {/* ── ADD / EDIT MODAL ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="relative bg-white rounded-2xl shadow-2xl p-7 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <button className="absolute right-4 top-4 text-gray-400 hover:text-red-500" onClick={() => setShowModal(false)}>✕</button>
-            <h2 className="text-xl font-bold text-[#122843] mb-5 flex items-center gap-3">
-              <img
-                src={modalRole === "Admin" ? "/icons/admin.png" : "/icons/passenger.png"}
-                className="w-10 h-10 object-contain"
-              />
-              {editingUser ? `Update ${modalRole}` : `Add New ${modalRole}`}
-            </h2>
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 relative max-h-[92vh] overflow-y-auto">
 
-            {formError && (
-              <div className="mb-4 text-[10px] font-black text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 uppercase tracking-widest">
-                ⚠️ {formError}
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute right-5 top-5 w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition font-black text-sm"
+            >✕</button>
+
+            {/* Header */}
+            <div className="mb-6">
+              <h2 className="text-xl font-black text-[#122843] tracking-tight">
+                {editingUser ? "Edit User" : "Add New Admin"}
+              </h2>
+              <p className="text-xs text-gray-400 font-medium mt-0.5">
+                {editingUser
+                  ? `Editing account — ${fmtId(editingUser.role, editingUser.id)}`
+                  : "Create a new administrator account"}
+              </p>
+            </div>
+
+            {/* API-level error */}
+            {apiError && (
+              <div className="mb-5 flex items-start gap-2 text-xs font-semibold text-red-600 bg-red-50 p-3.5 rounded-xl border border-red-100">
+                <span className="mt-0.5">⚠</span>
+                <span>{apiError}</span>
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {/* First Name */}
               <div>
-                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-wider">Full Name</label>
+                <label className={labelCls}>First Name</label>
                 <input
-                  className="w-full h-10 border rounded-lg px-3 text-sm focus:border-[#4CAF8A] outline-none"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. Kavindra Senarathne"
+                  className={fieldErrors.firstName ? inputError : inputNormal}
+                  placeholder="Kavindu"
+                  value={form.firstName}
+                  onChange={(e) => setField("firstName", e.target.value)}
                 />
+                <FieldError msg={fieldErrors.firstName} />
               </div>
+
+              {/* Last Name */}
               <div>
-                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-wider">Email Address</label>
+                <label className={labelCls}>Last Name</label>
                 <input
-                  className="w-full h-10 border rounded-lg px-3 text-sm focus:border-[#4CAF8A] outline-none"
+                  className={fieldErrors.lastName ? inputError : inputNormal}
+                  placeholder="Perera"
+                  value={form.lastName}
+                  onChange={(e) => setField("lastName", e.target.value)}
+                />
+                <FieldError msg={fieldErrors.lastName} />
+              </div>
+
+              {/* Email */}
+              <div className="col-span-2">
+                <label className={labelCls}>Email Address</label>
+                <input
+                  type="email"
+                  className={fieldErrors.email ? inputError : inputNormal}
+                  placeholder="admin@routeme.lk"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder={modalRole === "Admin" ? "email@routeme.lk" : "email@gmail.com"}
+                  onChange={(e) => setField("email", e.target.value)}
                 />
+                <FieldError msg={fieldErrors.email} />
               </div>
-              <div>
-                <label className="block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-wider">Phone Number</label>
+
+              {/* Phone */}
+              <div className="col-span-2">
+                <label className={labelCls}>Phone Number <span className="normal-case font-medium text-gray-300">(optional)</span></label>
                 <input
-                  className="w-full h-10 border rounded-lg px-3 text-sm focus:border-[#4CAF8A] outline-none"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className={inputNormal}
                   placeholder="07xxxxxxxx"
-                  maxLength={10}
+                  value={form.phone}
+                  onChange={(e) => setField("phone", e.target.value)}
                 />
               </div>
 
-              {/* NIC — Admin only */}
-              {modalRole === "Admin" && (
-                <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-wider">NIC Number</label>
-                  <input
-                    className="w-full h-10 border rounded-lg px-3 text-sm focus:border-[#4CAF8A] outline-none"
-                    value={form.nic}
-                    onChange={(e) => setForm({ ...form, nic: e.target.value })}
-                    placeholder="e.g. 199012345678 or 901234567V"
-                  />
-                </div>
-              )}
-
-              {/* PASSWORD — Admin only */}
-              {modalRole === "Admin" && (
-                <div>
-                  <label className="block text-[10px] uppercase font-black text-gray-400 mb-2 tracking-wider">Password</label>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      type="button"
-                      onClick={() => setPasswordMode("auto")}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
-                        passwordMode === "auto" ? "bg-[#122843] text-white border-[#122843]" : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      ✨ Auto-Generate
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPasswordMode("custom")}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
-                        passwordMode === "custom" ? "bg-[#122843] text-white border-[#122843]" : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      ✏️ Custom Password
-                    </button>
-                  </div>
-
-                  {passwordMode === "auto" ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-10 border border-dashed border-[#4CAF8A] rounded-lg px-3 flex items-center justify-between bg-green-50">
-                        <span className="text-sm font-mono text-[#122843] font-bold tracking-wider">
-                          {showModalPassword ? autoPassword : "•".repeat(autoPassword.length)}
-                        </span>
-                        <button type="button" onClick={() => setShowModalPassword(!showModalPassword)} className="text-gray-400 hover:text-gray-600 text-xs ml-2">
-                          {showModalPassword ? "🙈" : "👁️"}
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setAutoPassword(generatePassword())}
-                        className="h-10 px-3 rounded-lg bg-[#4CAF8A] text-white text-xs font-bold hover:bg-[#3d9e7a] transition"
-                        title="Regenerate"
-                      >
-                        🔄
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <input
-                        type={showModalPassword ? "text" : "password"}
-                        className="w-full h-10 border rounded-lg px-3 pr-10 text-sm focus:border-[#4CAF8A] outline-none"
-                        value={customPassword}
-                        onChange={(e) => setCustomPassword(e.target.value)}
-                        placeholder="Min. 8 characters"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowModalPassword(!showModalPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showModalPassword ? "🙈" : "👁️"}
-                      </button>
-                    </div>
+              {/* Password */}
+              <div className="col-span-2">
+                <label className={labelCls}>
+                  {editingUser
+                    ? "New Password"
+                    : "Password"}
+                  {editingUser && (
+                    <span className="normal-case font-medium text-gray-300 ml-1">(leave blank to keep current)</span>
                   )}
-                  <p className="text-[10px] text-gray-400 mt-1.5">
-                    {passwordMode === "auto" ? "A secure password has been generated. Share it with the admin." : "Enter a strong password with at least 8 characters."}
-                  </p>
-                </div>
-              )}
+                </label>
+                <input
+                  type="password"
+                  className={fieldErrors.password ? inputError : inputNormal}
+                  placeholder={editingUser ? "Leave blank to keep unchanged" : "Min. 8 chars, 1 uppercase, 1 number"}
+                  value={form.password}
+                  onChange={(e) => setField("password", e.target.value)}
+                />
+                <FieldError msg={fieldErrors.password} />
+              </div>
             </div>
 
-            <div className="mt-8 flex justify-end gap-3">
-              <button className="px-5 py-2 rounded-lg bg-gray-100 font-bold text-gray-600 text-sm hover:bg-gray-200" onClick={() => setShowModal(false)}>
-                Discard
+            {/* Actions */}
+            <div className="mt-7 flex justify-end gap-3">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-5 py-2 rounded-xl bg-gray-100 font-bold text-gray-600 text-sm hover:bg-gray-200 transition"
+              >
+                Cancel
               </button>
-              <button className="px-8 py-2 rounded-lg bg-[#122843] text-white font-bold text-sm shadow-lg" onClick={handleSave}>
-                Save {modalRole}
+              <button
+                onClick={handleSave}
+                className="px-8 py-2 rounded-xl bg-[#122843] text-white font-bold text-sm shadow-lg hover:bg-[#1a3a5c] transition active:scale-95"
+              >
+                {editingUser ? "Save Changes" : "Create Admin"}
               </button>
             </div>
           </div>
@@ -512,82 +633,88 @@ export default function AdminUsers() {
       {viewUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md mx-4 shadow-2xl p-7 relative">
-            <button className="absolute right-4 top-4 text-gray-400 hover:text-red-500 font-black" onClick={() => setViewUser(null)}>✕</button>
-            <h2 className="text-xl font-bold text-[#122843] mb-6 flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${getAvatarColor(viewUser.id)}`}>
-                {getInitial(viewUser.name)}
-              </div>
-              User Profile
-            </h2>
 
-            <div className="space-y-4 bg-gray-50/50 p-6 rounded-xl border border-gray-100">
-              <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 mb-1">User ID</p>
-                <p className="font-bold text-gray-800">{viewUser.userId}</p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 mb-1">Full Name</p>
-                <p className="font-bold text-gray-800">{viewUser.name}</p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 mb-1">Email</p>
-                <p className="font-bold text-gray-800">{viewUser.email}</p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 mb-1">Phone</p>
-                <p className="font-bold text-gray-800">{viewUser.phone}</p>
-              </div>
+            <button
+              onClick={() => setViewUser(null)}
+              className="absolute right-5 top-5 w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition font-black text-sm"
+            >✕</button>
 
-              {viewUser.role === "Admin" && viewUser.nic && (
-                <div>
-                  <p className="text-[10px] uppercase font-black text-gray-400 mb-1">NIC Number</p>
-                  <div className="flex items-center gap-2">
-                    <p className="font-mono font-bold text-gray-800 tracking-wider">
-                      {showViewNic ? viewUser.nic : maskNic(viewUser.nic)}
-                    </p>
-                    <button type="button" onClick={() => setShowViewNic(!showViewNic)} className="text-gray-400 hover:text-gray-600 text-sm">
-                      {showViewNic ? "🙈" : "👁️"}
-                    </button>
-                  </div>
+            {/* Avatar + name */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className={`w-14 h-14 rounded-full ${avatarColor(viewUser.id)} flex items-center justify-center text-white text-xl font-black shadow-md ring-4 ring-white`}>
+                {getInitials(viewUser.firstName, viewUser.lastName)}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-xl font-black text-[#122843] tracking-tight">
+                    {viewUser.firstName} {viewUser.lastName}
+                  </h2>
+                  {viewUser.isActive && (
+                    <MdVerified className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  )}
                 </div>
-              )}
-
-              <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 mb-1">System Role</p>
-                <p className="font-bold text-gray-800">{viewUser.role}</p>
-              </div>
-
-              {viewUser.role === "Admin" && viewUser.password && (
-                <div>
-                  <p className="text-[10px] uppercase font-black text-gray-400 mb-1">Password</p>
-                  <div className="flex items-center gap-2">
-                    <p className="font-mono font-bold text-gray-800 tracking-wider">
-                      {showViewPassword ? viewUser.password : "•".repeat(viewUser.password.length)}
-                    </p>
-                    <button type="button" onClick={() => setShowViewPassword(!showViewPassword)} className="text-gray-400 hover:text-gray-600 text-sm">
-                      {showViewPassword ? "🙈" : "👁️"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-4 border-t border-gray-200">
-                <p className="text-[10px] uppercase font-black text-gray-400 mb-2">Account Status</p>
-                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm ${STATUS_STYLES[viewUser.status]}`}>
-                  {viewUser.status}
-                </span>
+                <p className="text-[11px] text-gray-400 font-mono font-bold tracking-widest mt-0.5">
+                  {fmtId(viewUser.role, viewUser.id)}
+                </p>
               </div>
             </div>
 
-            <div className="mt-8 flex justify-end">
-              <button onClick={() => setViewUser(null)} className="px-10 py-2.5 bg-[#122843] text-white rounded-xl text-sm font-bold shadow-xl">
+            {/* Details grid */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 bg-gray-50/80 p-5 rounded-xl border border-gray-100">
+              {[
+                ["Email",  viewUser.email],
+                ["Phone",  viewUser.phone || "—"],
+                ["Role",   viewUser.role.charAt(0).toUpperCase() + viewUser.role.slice(1)],
+                ["Status", viewUser.isActive ? "Active" : "Inactive"],
+                ["Joined", fmtDate(viewUser.createdAt)],
+              ].map(([label, val]) => (
+                <div key={label}>
+                  <p className="text-[10px] uppercase font-black text-gray-400 mb-0.5 tracking-widest">
+                    {label}
+                  </p>
+                  <p className="font-semibold text-gray-800 text-sm break-all leading-snug">
+                    {val}
+                  </p>
+                </div>
+              ))}
+
+              {/* Subscribed Routes — passengers only */}
+              {viewUser.role === "passenger" && (
+                <div className="col-span-2 pt-4 border-t border-gray-200">
+                  <p className="text-[10px] uppercase font-black text-gray-400 mb-2 tracking-widest">
+                    Subscribed Routes
+                  </p>
+                  {viewUser.subscribedRoutes?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {viewUser.subscribedRoutes.map((r) => (
+                        <span
+                          key={r}
+                          className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100"
+                        >
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 font-medium italic">
+                      No subscribed routes yet.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setViewUser(null)}
+                className="px-10 py-2.5 bg-[#122843] text-white rounded-xl text-sm font-bold shadow-xl hover:bg-[#1a3a5c] transition active:scale-95"
+              >
                 Close
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

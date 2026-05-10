@@ -1,369 +1,461 @@
 "use client";
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
+import axios from "axios";
 import toast from "react-hot-toast";
 import Swal from "sweetalert2";
-import { AiFillEdit } from "react-icons/ai";
+import { z, ZodIssue } from "zod";
+import { IoSearch, IoAddCircle, IoLocationSharp } from "react-icons/io5";
+import { FiMapPin, FiCheckCircle, FiAlertOctagon, FiEdit2 } from "react-icons/fi";
+import { MdLocationOn, MdEditLocationAlt } from "react-icons/md";
+import { TbMapPin } from "react-icons/tb";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type StopsMapPickerProps = {
-    formData: {
-        name: string;
-        longitude: string;
-        latitude: string;
-    };
-    setFormData: React.Dispatch<React.SetStateAction<{
-        name: string;
-        longitude: string;
-        latitude: string;
-    }>>;
+  formData: { stopName: string; longitude: string; latitude: string };
+  setFormData: React.Dispatch<React.SetStateAction<{ stopName: string; longitude: string; latitude: string }>>;
 };
 
 const StopsMapPicker = dynamic<StopsMapPickerProps>(
-    () => import("@/app/admin/manageStops/StopsMapPicker"),
-    {
-        ssr: false,
-        loading: () => (
-            <div className="h-75 rounded bg-slate-100 flex items-center justify-center text-sm text-slate-500">
-                Loading map...
-            </div>
-        ),
-    });
+  () => import("@/app/admin/manageStops/StopsMapPicker"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-64 rounded-lg bg-slate-100 flex items-center justify-center text-sm text-slate-500">
+        Loading map...
+      </div>
+    ),
+  }
+);
 
 type Stop = {
-    id: number;
-    name: string;
-    longitude: string;
-    latitude: string;
-    isActive: boolean;
+  id: number;
+  stopName: string;
+  longitude: string;
+  latitude: string;
+  isActive: boolean;
 };
 
+type StopFormValues = {
+  stopName: string;
+  latitude: string;
+  longitude: string;
+};
+
+type FieldErrors = Record<string, string>;
+
+// ─── Axios instance ───────────────────────────────────────────────────────────
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+
+const api = axios.create({ baseURL: BASE });
+
+api.interceptors.request.use((config) => {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  if (token) config.headers["Authorization"] = `Bearer ${token}`;
+  return config;
+});
+
+// ─── Zod Schema ───────────────────────────────────────────────────────────────
+const latRegex = /^-?([0-8]?[0-9](\.\d+)?|90(\.0+)?)$/;
+const lngRegex = /^-?((1[0-7][0-9]|[0-9]{1,2})(\.\d+)?|180(\.0+)?)$/;
+
+const stopFormSchema = z.object({
+  stopName:  z.string().min(1, "Stop name is required").min(3, "Stop name must be at least 3 characters").max(150, "Stop name must be under 150 characters"),
+  latitude:  z.string().min(1, "Latitude is required").regex(latRegex,  "Enter a valid latitude between -90 and 90"),
+  longitude: z.string().min(1, "Longitude is required").regex(lngRegex, "Enter a valid longitude between -180 and 180"),
+});
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const inputBase   = "w-full h-10 border rounded-lg px-3 text-sm outline-none transition bg-white text-black";
+const inputNormal = `${inputBase} border-gray-200 focus:border-[#4CAF8A] focus:ring-1 focus:ring-[#4CAF8A]`;
+const inputError  = `${inputBase} border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-300 bg-red-50/30`;
+const labelCls    = "block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-widest";
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-[11px] text-red-500 font-semibold">{msg}</p>;
+}
+
+function StatCard({ icon, bg, value, label, color }: {
+  icon: React.ReactNode; bg: string; value: number; label: string; color: string;
+}) {
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
+      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+        {icon}
+      </div>
+      <div>
+        <p className={`text-3xl font-black tracking-tight ${color}`}>{value}</p>
+        <p className="text-sm text-gray-400 font-semibold mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const flattenZodErrors = (issues: ZodIssue[]): FieldErrors => {
+  const errs: FieldErrors = {};
+  issues.forEach((e) => { const key = e.path.join("."); if (!errs[key]) errs[key] = e.message; });
+  return errs;
+};
+
+const emptyForm = (): StopFormValues => ({ stopName: "", latitude: "", longitude: "" });
+
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function AdminManageStopsPage() {
-    const [useMap, setUseMap] = useState(false);
-    const [showForm, setShowForm] = useState(false);
-    const [formData, setFormData] = useState({
-        name: "",
-        longitude: "",
-        latitude: "",
+  const [useMap,      setUseMap]      = useState(false);
+  const [showModal,   setShowModal]   = useState(false);
+  const [formData,    setFormData]    = useState<StopFormValues>(emptyForm());
+  const [search,      setSearch]      = useState("");
+  const [editId,      setEditId]      = useState<number | null>(null);
+  const [stops,       setStops]       = useState<Stop[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [apiError,    setApiError]    = useState("");
+
+  // ── Load stops ──────────────────────────────────────────────────────────────
+  const loadStops = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get<{ data: { stops: Stop[] } }>("/stops");
+      setStops(data.data.stops);
+    } catch {
+      // keep existing state
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadStops(); }, [loadStops]);
+
+  // ── Derived stats ─────────────────────────────────────────────────────────
+  const totalStops    = stops.length;
+  const activeStops   = stops.filter((s) => s.isActive).length;
+  const inactiveStops = stops.filter((s) => !s.isActive).length;
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (fieldErrors[name]) setFieldErrors((prev) => { const next = { ...prev }; delete next[name]; return next; });
+  };
+
+  const openAddModal = () => {
+    setEditId(null); setFormData(emptyForm()); setUseMap(false);
+    setFieldErrors({}); setApiError(""); setShowModal(true);
+  };
+
+  const openEditModal = (stop: Stop) => {
+    setEditId(stop.id);
+    setFormData({ stopName: stop.stopName, longitude: stop.longitude, latitude: stop.latitude });
+    setUseMap(false); setFieldErrors({}); setApiError(""); setShowModal(true);
+  };
+
+  const handleSubmit = async () => {
+    const result = stopFormSchema.safeParse(formData);
+    if (!result.success) { setFieldErrors(flattenZodErrors(result.error.issues)); return; }
+    setFieldErrors({}); setApiError("");
+    try {
+      if (editId !== null) {
+        await api.put(`/stops/${editId}`, formData);
+        toast.success("Stop updated successfully");
+      } else {
+        await api.post("/stops", formData);
+        toast.success(`${formData.stopName} added successfully`);
+      }
+      await loadStops();
+      setFormData(emptyForm()); setShowModal(false); setEditId(null);
+    } catch (err: any) {
+      const msg = err.response?.data?.message ?? err.message ?? "Save failed";
+      setApiError(msg); toast.error(msg);
+    }
+  };
+
+  const handleToggleActive = async (id: number) => {
+    const stopToUpdate = stops.find((s) => s.id === id);
+    if (!stopToUpdate) return;
+    const nextActive = !stopToUpdate.isActive;
+    const confirmed = await Swal.fire({
+      title: `${nextActive ? "Activate" : "Suspend"} this stop?`,
+      text: `"${stopToUpdate.stopName}" will be marked as ${nextActive ? "active" : "suspended"}.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: nextActive ? "#16a34a" : "#d97706",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: `Yes, ${nextActive ? "activate" : "suspend"}`,
     });
-    const [search, setSearch] = useState("");
-    const [editId, setEditId] = useState<number | null>(null);
-    const [stops, setStops] = useState<Stop[]>([
-        {
-            id: 1,
-            name: "Colombo Fort",
-            longitude: "79.8500",
-            latitude: "6.9344",
-            isActive: true,
-        },
-        {
-            id: 2,
-            name: "Pettah",
-            longitude: "79.8588",
-            latitude: "6.9395",
-            isActive: true,
-        },
-        {
-            id: 3,
-            name: "Kottawa",
-            longitude: "79.9580",
-            latitude: "6.8410",
-            isActive: true,
-        },
-        {
-            id: 4,
-            name: "Maharagama",
-            longitude: "79.9265",
-            latitude: "6.8480",
-            isActive: true,
-        },
-    ]);
+    if (!confirmed.isConfirmed) return;
+    try {
+      await api.patch(`/stops/${id}/toggle`);
+      await loadStops();
+      toast.success(`"${stopToUpdate.stopName}" ${nextActive ? "activated" : "suspended"}`);
+    } catch {
+      toast.error("Failed to update stop status");
+    }
+  };
 
-    // handle input change
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value,
-        });
-    };
+  const filteredStops = stops.filter((s) =>
+    s.stopName.toLowerCase().includes(search.toLowerCase())
+  );
 
-    // handle submit
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+  const fe = (key: string) => fieldErrors[key];
+  const ic = (key: string) => (fe(key) ? inputError : inputNormal);
 
-        if (editId !== null) {
-            const editedStop = stops.find((stop) => stop.id === editId);
-            // EDIT
-            setStops(
-                stops.map((stop) =>
-                    stop.id === editId ? { ...stop, ...formData } : stop
-                )
-            );
-            toast.success(`${editedStop?.name ?? "Stop"} updated successfully`);
-            setEditId(null);
-        } else {
-            // ADD
-            const newStop: Stop = {
-                id: Date.now(),
-                name: formData.name,
-                longitude: formData.longitude,
-                latitude: formData.latitude,
-                isActive: true,
-            };
-            setStops([...stops, newStop]);
-            toast.success(`${newStop.name} added successfully`);
-        }
+  // ════════════════════════════════════════════════════════════════════════════
+  return (
+    <div className="p-6 bg-[#f5f7fa] min-h-full">
 
-        setFormData({ name: "", longitude: "", latitude: "" });
-        setShowForm(false);
-    };
-    const handleEdit = (stop: Stop) => {
-        setFormData({
-            name: stop.name,
-            longitude: stop.longitude,
-            latitude: stop.latitude,
-        });
-        setEditId(stop.id);
-        setShowForm(true);
-    };
-    const handleToggleActive = async (id: number) => {
-        const stopToUpdate = stops.find((stop) => stop.id === id);
-        if (!stopToUpdate) {
-            return;
-        }
+      {/* ── STATS ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <StatCard
+          icon={<IoLocationSharp className="w-6 h-6 text-blue-500" />}
+          bg="bg-blue-50" value={totalStops} label="Total Stops" color="text-blue-600" />
+        <StatCard
+          icon={<FiCheckCircle className="w-6 h-6 text-emerald-500" />}
+          bg="bg-emerald-50" value={activeStops} label="Active Stops" color="text-emerald-600" />
+        <StatCard
+          icon={<FiAlertOctagon className="w-6 h-6 text-amber-500" />}
+          bg="bg-amber-50" value={inactiveStops} label="Suspended Stops" color="text-amber-600" />
+      </div>
 
-        const nextActiveState = !stopToUpdate.isActive;
+      {/* ── TOOLBAR ── */}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 w-72 shadow-sm">
+          <IoSearch className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <input
+            type="text"
+            placeholder="Search stops..."
+            className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button
+          onClick={openAddModal}
+          className="ml-auto h-10 bg-[#f5a623] hover:bg-[#e09510] active:scale-95 text-white font-bold px-5 rounded-xl transition-all shadow-sm text-sm flex items-center gap-2"
+        >
+          <IoAddCircle className="w-4 h-4" />
+          Add Stop
+        </button>
+      </div>
 
-        const result = await Swal.fire({
-            title: `${nextActiveState ? "Activate" : "Deactivate"} this stop?`,
-            text: `${stopToUpdate.name} will be marked as ${nextActiveState ? "active" : "deactive"}.`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: nextActiveState ? "#16a34a" : "#d33",
-            cancelButtonColor: "#6b7280",
-            confirmButtonText: `Yes, ${nextActiveState ? "activate" : "deactivate"}`,
-            cancelButtonText: "Cancel",
-        });
+      {/* ── TABLE ── */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
 
-        if (!result.isConfirmed) {
-            return;
-        }
+        {/* Header */}
+        <div className="grid grid-cols-[60px_1fr_120px_120px_110px_110px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+          <div>#</div>
+          <div>Stop Name</div>
+          <div>Latitude</div>
+          <div>Longitude</div>
+          <div>Status</div>
+          <div className="text-center">Actions</div>
+        </div>
 
-        setStops(
-            stops.map((stop) =>
-                stop.id === id ? { ...stop, isActive: nextActiveState } : stop
-            )
-        );
-        toast.success(`${stopToUpdate.name} ${nextActiveState ? "activated" : "deactivated"} successfully`);
-    };
-    const filteredStops = stops.filter((stop) =>
-        stop.name.toLowerCase().includes(search.toLowerCase())
-    );
+        {/* Body */}
+        {loading ? (
+          <div className="flex items-center justify-center py-24 gap-3 text-gray-400">
+            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm font-semibold">Loading stops…</span>
+          </div>
+        ) : filteredStops.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-gray-400 gap-2">
+            <FiMapPin className="w-8 h-8 opacity-30" />
+            <p className="text-sm font-semibold">No stops found.</p>
+          </div>
+        ) : (
+          filteredStops.map((stop, idx) => (
+            <div
+              key={stop.id}
+              className={`grid grid-cols-[60px_1fr_120px_120px_110px_110px] items-center px-5 py-3.5 border-b transition-colors duration-150 ${
+                idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+              } hover:bg-blue-50/30`}
+            >
+              <div className="font-mono text-[11px] font-bold text-gray-400 tracking-wider">
+                #{stop.id}
+              </div>
 
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <MdLocationOn className="w-4 h-4 text-blue-500" />
+                </div>
+                <span className="font-semibold text-gray-800 text-sm truncate">{stop.stopName}</span>
+              </div>
 
-    return (
-        <section className="p-6 space-y-6">
-            <div className=" justify-between items-center flex">
-                <button className="border w-30 h-10 rounded-md bg-[#4CAF8A] text-white font-bold hover:bg-[#3d9e7a]" onClick={() => setShowForm(true)}>
-                    Add Stops
+              <div className="font-mono text-xs text-gray-500">{stop.latitude}</div>
+              <div className="font-mono text-xs text-gray-500">{stop.longitude}</div>
+
+              <div>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide ${
+                  stop.isActive
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-amber-100 text-amber-700"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stop.isActive ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  {stop.isActive ? "Active" : "Suspended"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => openEditModal(stop)}
+                  title="Edit stop"
+                  className="w-8 h-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-500 hover:text-amber-700 flex items-center justify-center transition-all active:scale-90"
+                >
+                  <FiEdit2 className="w-3.5 h-3.5" />
                 </button>
-                <label className="border w-30 h-10 rounded-md bg-[#122843] text-white font-bold flex items-center justify-center">
-                    Total: {stops.length}
-                </label>
 
+                <button
+                  onClick={() => handleToggleActive(stop.id)}
+                  title={stop.isActive ? "Suspend stop" : "Activate stop"}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full border transition-colors ${
+                    stop.isActive ? "bg-emerald-400 border-emerald-400" : "bg-slate-200 border-slate-300"
+                  }`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    stop.isActive ? "translate-x-6" : "translate-x-1"
+                  }`} />
+                </button>
+              </div>
             </div>
-            {showForm && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          ))
+        )}
+      </div>
 
-                    <div className="bg-white rounded-lg shadow-lg w-125 p-6 space-y-4">
+      {/* ══════════════════════════════════════════════════════════════════════
+          ADD / EDIT MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 relative max-h-[92vh] overflow-y-auto">
 
-                        <h2 className="text-lg font-semibold">
-                            {editId ? "Edit Stop" : "Add New Stop"}
-                        </h2>
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute right-5 top-5 w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition font-black text-sm"
+            >✕</button>
 
-                        <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-[#122843] flex items-center justify-center flex-shrink-0">
+                {editId !== null
+                  ? <MdEditLocationAlt className="w-6 h-6 text-white" />
+                  : <TbMapPin className="w-6 h-6 text-white" />}
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-[#122843] tracking-tight">
+                  {editId !== null ? "Edit Stop" : "New Stop Registration"}
+                </h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">
+                  {editId !== null ? "Update stop details" : "Add a new bus stop to the network"}
+                </p>
+              </div>
+            </div>
 
-                            {/* STOP NAME */}
-                            <input
-                                type="text"
-                                name="name"
-                                placeholder="Stop Name"
-                                value={formData.name}
-                                onChange={handleChange}
-                                className="w-full border p-2 rounded"
-                                required
-                            />
-
-                            {/* TOGGLE */}
-                            <div className="flex gap-4 text-sm">
-                                <label className="flex items-center gap-1">
-                                    <input
-                                        type="radio"
-                                        checked={!useMap}
-                                        onChange={() => setUseMap(false)}
-                                    />
-                                    Enter Manually
-                                </label>
-
-                                <label className="flex items-center gap-1">
-                                    <input
-                                        type="radio"
-                                        checked={useMap}
-                                        onChange={() => setUseMap(true)}
-                                    />
-                                    Pick from Map
-                                </label>
-                            </div>
-
-                            {/* MAP MODE */}
-                            {useMap && (
-                                <StopsMapPicker formData={formData} setFormData={setFormData} />
-                            )}
-
-                            {/* LAT/LNG INPUTS */}
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    name="latitude"
-                                    placeholder="Latitude"
-                                    value={formData.latitude}
-                                    onChange={handleChange}
-                                    readOnly={useMap}
-                                    className={`w-full border p-2 rounded ${useMap ? "bg-gray-100" : ""
-                                        }`}
-                                    required
-                                />
-
-                                <input
-                                    type="text"
-                                    name="longitude"
-                                    placeholder="Longitude"
-                                    value={formData.longitude}
-                                    onChange={handleChange}
-                                    readOnly={useMap}
-                                    className={`w-full border p-2 rounded ${useMap ? "bg-gray-100" : ""
-                                        }`}
-                                    required
-                                />
-                            </div>
-
-                            {useMap && (
-                                <p className="text-sm text-gray-500">
-                                    Click on the map to select location
-                                </p>
-                            )}
-
-                            {/* BUTTONS */}
-                            <div className="flex justify-end gap-2 pt-2">
-
-                                <button
-                                    type="button"
-                                    onClick={() => setShowForm(false)}
-                                    className="px-4 py-2 bg-gray-400 text-white rounded"
-                                >
-                                    Cancel
-                                </button>
-
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded"
-                                >
-                                    Save
-                                </button>
-
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            {apiError && (
+              <div className="mb-5 flex items-start gap-2 text-xs font-semibold text-red-600 bg-red-50 p-3.5 rounded-xl border border-red-100">
+                <span className="mt-0.5">⚠</span>
+                <span>{apiError}</span>
+              </div>
             )}
-            <div className="w-full md:w-1/3">
+
+            <div className="space-y-4">
+
+              <div>
+                <label className={labelCls}>Stop Name</label>
                 <input
-                    type="text"
-                    placeholder="Search stops..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full border border-slate-300 bg-white p-2 rounded-md"
+                  type="text"
+                  name="stopName"
+                  placeholder="e.g. Colombo Fort"
+                  value={formData.stopName}
+                  onChange={handleChange}
+                  className={ic("stopName")}
                 />
-            </div>
+                <FieldError msg={fe("stopName")} />
+              </div>
 
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-                <div className="grid grid-cols-7 bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-600 border-b uppercase tracking-wide">
-                    <div>Stop ID</div>
-                    <div>Stop Name</div>
-                    <div>Longitude</div>
-                    <div>Latitude</div>
-                    <div>Status</div>
-                    <div>Map</div>
-                    <div className="text-center">Action</div>
+              <div>
+                <label className={labelCls}>Location Input Method</label>
+                <div className="flex gap-2">
+                  {(["manual", "map"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setUseMap(mode === "map")}
+                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold border-2 transition flex items-center justify-center gap-2 ${
+                        (mode === "map") === useMap
+                          ? "bg-[#122843] text-white border-[#122843]"
+                          : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      {mode === "manual"
+                        ? <><FiEdit2 className="w-3.5 h-3.5" /> Enter Manually</>
+                        : <><FiMapPin className="w-3.5 h-3.5" /> Pick from Map</>}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                {filteredStops.length > 0 ? (
-                    filteredStops.map((stop, index) => {
-                        const stopCode = `S${String(index + 1).padStart(2, "0")}`;
+              {useMap && (
+                <div className="rounded-xl overflow-hidden border border-gray-200">
+                  <StopsMapPicker formData={formData} setFormData={setFormData} />
+                  <p className="text-xs text-gray-400 px-3 py-2 bg-gray-50 flex items-center gap-1.5">
+                    <IoLocationSharp className="w-3.5 h-3.5 text-[#4CAF8A]" />
+                    Click on the map to set the stop location.
+                  </p>
+                </div>
+              )}
 
-                        return (
-                            <div
-                                key={stop.id}
-                                className="grid grid-cols-7 items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition"
-                            >
-                                <div className="font-semibold">
-                                    <span className="bg-[#122843] text-white px-2 py-1 rounded text-sm">
-                                        {stopCode}
-                                    </span>
-                                </div>
-
-                                <div className="font-medium text-gray-600">{stop.name}</div>
-                                <div>{stop.longitude}</div>
-                                <div>{stop.latitude}</div>
-
-                                <div>
-                                    <span
-                                        className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${stop.isActive
-                                            ? "bg-[#61de9f] text-[#00796b]"
-                                            : "bg-red-100 text-red-600"
-                                        }`}
-                                    >
-                                        {stop.isActive ? "Active" : "Deactive"}
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <a
-                                        href={`https://www.google.com/maps?q=${stop.latitude},${stop.longitude}`}
-                                        target="_blank"
-                                        className="font-semibold text-[#1d9e75] hover:underline"
-                                    >
-                                        View
-                                    </a>
-                                </div>
-
-                                <div className="flex items-center justify-center gap-1.5">
-                                    <button
-                                        onClick={() => handleEdit(stop)}
-                                        className="w-8 h-8 rounded-full  flex items-center justify-center "
-                                    >
-                                        <AiFillEdit size={18} color="blue" />
-                                    </button>
-
-                                    <button
-                                        onClick={() => handleToggleActive(stop.id)}
-                                        className={`relative inline-flex h-8 w-14 items-center rounded-full border transition-colors ${stop.isActive ? "bg-[#61de9f] border-[#61de9f]" : "bg-slate-200 border-slate-300"
-                                            }`}
-                                        title={stop.isActive ? "Deactivate stop" : "Activate stop"}
-                                        aria-label={stop.isActive ? "Deactivate stop" : "Activate stop"}
-                                    >
-                                        <span
-                                            className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform shadow ${stop.isActive ? "translate-x-7" : "translate-x-1"
-                                                }`}
-                                        />
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })
-                ) : (
-                    <div className="text-center py-20 text-gray-400 text-sm">No stops added yet</div>
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Latitude</label>
+                  <input
+                    type="text"
+                    name="latitude"
+                    placeholder="6.9271"
+                    value={formData.latitude}
+                    onChange={handleChange}
+                    readOnly={useMap}
+                    className={`${ic("latitude")} ${useMap ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                  />
+                  <FieldError msg={fe("latitude")} />
+                </div>
+                <div>
+                  <label className={labelCls}>Longitude</label>
+                  <input
+                    type="text"
+                    name="longitude"
+                    placeholder="79.8612"
+                    value={formData.longitude}
+                    onChange={handleChange}
+                    readOnly={useMap}
+                    className={`${ic("longitude")} ${useMap ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                  />
+                  <FieldError msg={fe("longitude")} />
+                </div>
+              </div>
             </div>
-        </section>
-    );
+
+            <div className="mt-8 flex justify-end gap-3">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-5 py-2 rounded-xl bg-gray-100 font-bold text-gray-600 text-sm hover:bg-gray-200 transition"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="px-8 py-2 rounded-xl bg-[#122843] text-white font-bold text-sm shadow-lg hover:bg-[#1a3a5c] transition active:scale-95"
+              >
+                Save Stop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
