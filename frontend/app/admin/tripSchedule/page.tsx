@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import axios from "axios";
 import Swal from "sweetalert2";
 import { CgClose } from "react-icons/cg";
-import { IoEye } from "react-icons/io5";
-import { FiEdit2, FiSearch } from "react-icons/fi";
+import { IoEye, IoSearch, IoAddCircle } from "react-icons/io5";
+import { IoPencil, IoBan, IoCheckmarkCircle } from "react-icons/io5";
 import {
   FaCheckCircle,
   FaExclamationTriangle,
@@ -13,169 +14,72 @@ import {
 import { MdDirectionsBus, MdSchedule } from "react-icons/md";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type TripStatus = "Active" | "Scheduled" | "Delayed" | "Completed";
-type Direction = "Forward" | "Return";
+type TripStatus = "active" | "scheduled" | "delayed" | "completed" | "cancelled";
+type Direction = "forward" | "return";
+
+const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+type Day = (typeof ALL_DAYS)[number];
 
 type Trip = {
-  id: string;
+  id: number;
   routeId: number;
-  routeName: string;
+  busId: number;
   direction: Direction;
-  from: string;
-  to: string;
-  departure: string;
-  arrival: string;
-  duration: string;
-  busId: string;
-  driverName: string;
-  days: string;
+  departureTime: string;
+  arrivalTime: string;
+  duration: string | null;
+  days: Day[];
   status: TripStatus;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  route?: { id: number; routeName: string; from: string; to: string } | null;
+  bus?: { id: number; registrationNumber: string; busType: string } | null;
 };
 
-type Route = { id: number; name: string; from: string; to: string };
+type Route = { id: number; routeName: string; from: string; to: string };
+type Bus = { id: number; registrationNumber: string; busType: string };
 
-// ─── Inline API helper ────────────────────────────────────────────────────────
+// ─── Axios instance ───────────────────────────────────────────────────────────
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message ?? "Request failed");
-  return json.data as T;
-}
+const api = axios.create({ baseURL: BASE });
 
-// ─── Sample Data ──────────────────────────────────────────────────────────────
-const SAMPLE_ROUTES: Route[] = [
-  { id: 1, name: "Route 120", from: "Colombo Fort", to: "Kesbewa" },
-  { id: 2, name: "Route 138", from: "Colombo Fort", to: "Avissawella" },
-  { id: 3, name: "Route 155", from: "Colombo Fort", to: "Malabe" },
-  { id: 4, name: "Route 176", from: "Nugegoda",     to: "Homagama" },
-  { id: 5, name: "Route 212", from: "Maharagama",   to: "Piliyandala" },
-];
-
-const SAMPLE_TRIPS: Trip[] = [
-  {
-    id: "TR-001", routeId: 1, routeName: "Route 120",
-    direction: "Forward", from: "Colombo Fort", to: "Kesbewa",
-    departure: "06:00", arrival: "07:10", duration: "1h 10m",
-    busId: "CP NB-1234", driverName: "Kasun Silva",
-    days: "Mon-Sat", status: "Active",
-  },
-  {
-    id: "TR-002", routeId: 1, routeName: "Route 120",
-    direction: "Return", from: "Kesbewa", to: "Colombo Fort",
-    departure: "07:30", arrival: "08:40", duration: "1h 10m",
-    busId: "CP NB-1234", driverName: "Kasun Silva",
-    days: "Mon-Sat", status: "Scheduled",
-  },
-  {
-    id: "TR-003", routeId: 2, routeName: "Route 138",
-    direction: "Forward", from: "Colombo Fort", to: "Avissawella",
-    departure: "08:30", arrival: "10:00", duration: "1h 30m",
-    busId: "WP BA-5678", driverName: "Nimal Perera",
-    days: "Mon-Sun", status: "Active",
-  },
-  {
-    id: "TR-004", routeId: 2, routeName: "Route 138",
-    direction: "Return", from: "Avissawella", to: "Colombo Fort",
-    departure: "11:00", arrival: "12:30", duration: "1h 30m",
-    busId: "WP BA-5678", driverName: "Nimal Perera",
-    days: "Mon-Sun", status: "Delayed",
-  },
-  {
-    id: "TR-005", routeId: 3, routeName: "Route 155",
-    direction: "Forward", from: "Colombo Fort", to: "Malabe",
-    departure: "07:00", arrival: "08:15", duration: "1h 15m",
-    busId: "SP CA-9012", driverName: "Ruwan Fernando",
-    days: "Mon-Fri", status: "Scheduled",
-  },
-  {
-    id: "TR-006", routeId: 4, routeName: "Route 176",
-    direction: "Forward", from: "Nugegoda", to: "Homagama",
-    departure: "09:00", arrival: "09:45", duration: "45m",
-    busId: "WP KF-3456", driverName: "Sunil Bandara",
-    days: "Mon-Sat", status: "Completed",
-  },
-  {
-    id: "TR-007", routeId: 5, routeName: "Route 212",
-    direction: "Forward", from: "Maharagama", to: "Piliyandala",
-    departure: "13:45", arrival: "14:30", duration: "45m",
-    busId: "CP NB-7890", driverName: "Chaminda Ratne",
-    days: "Mon-Sat", status: "Scheduled",
-  },
-  {
-    id: "TR-008", routeId: 3, routeName: "Route 155",
-    direction: "Return", from: "Malabe", to: "Colombo Fort",
-    departure: "17:00", arrival: "18:20", duration: "1h 20m",
-    busId: "SP CA-9012", driverName: "Ruwan Fernando",
-    days: "Mon-Fri", status: "Active",
-  },
-];
+api.interceptors.request.use((config) => {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  if (token) config.headers["Authorization"] = `Bearer ${token}`;
+  return config;
+});
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATUS_STYLES: Record<TripStatus, string> = {
-  Active:    "bg-[#61de9f] text-[#00796b]",
-  Scheduled: "bg-blue-100 text-blue-700",
-  Delayed:   "bg-yellow-100 text-yellow-700",
-  Completed: "bg-gray-100 text-gray-500",
+  active:    "bg-emerald-100 text-emerald-700",
+  scheduled: "bg-blue-100 text-blue-700",
+  delayed:   "bg-yellow-100 text-yellow-700",
+  completed: "bg-gray-100 text-gray-500",
+  cancelled: "bg-red-100 text-red-600",
 };
 
-const STATUS_OPTIONS: TripStatus[] = ["Active", "Scheduled", "Delayed", "Completed"];
-
-const DAY_OPTIONS = [
-  "All days",
-  "Mon-Fri",
-  "Mon-Sat",
-  "Mon-Sun",
-  "Sat-Sun",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
-];
-
-const DIRECTION_OPTIONS: Direction[] = ["Forward", "Return"];
-
-type FormData = {
-  routeName: string;
-  direction: Direction;
-  from: string;
-  to: string;
-  departure: string;
-  arrival: string;
-  busId: string;
-  driverName: string;
-  days: string;
-  status: TripStatus;
+const STATUS_DOT: Record<TripStatus, string> = {
+  active:    "bg-emerald-500",
+  scheduled: "bg-blue-500",
+  delayed:   "bg-yellow-400",
+  completed: "bg-gray-400",
+  cancelled: "bg-red-500",
 };
 
-const emptyForm = (): FormData => ({
-  routeName: "",
-  direction: "Forward",
-  from: "",
-  to: "",
-  departure: "",
-  arrival: "",
-  busId: "",
-  driverName: "",
-  days: "Mon-Sat",
-  status: "Scheduled",
-});
+const STATUS_OPTIONS: TripStatus[] = ["active", "scheduled", "delayed", "completed", "cancelled"];
 
-// ─── Duration helper ──────────────────────────────────────────────────────────
+function displayDuration(trip: Trip): string {
+  if (trip.duration) return trip.duration;
+  return calcDuration(trip.departureTime, trip.arrivalTime);
+}
+
 function calcDuration(dep: string, arr: string): string {
-  if (!dep || !arr) return "-";
-  const [dh, dm] = dep.split(":").map(Number);
-  const [ah, am] = arr.split(":").map(Number);
+  if (!dep || !arr) return "—";
+  const [dh, dm] = dep.slice(0, 5).split(":").map(Number);
+  const [ah, am] = arr.slice(0, 5).split(":").map(Number);
   let mins = ah * 60 + am - (dh * 60 + dm);
   if (mins <= 0) mins += 1440;
   const h = Math.floor(mins / 60), m = mins % 60;
@@ -184,513 +88,698 @@ function calcDuration(dep: string, arr: string): string {
   return `${h}h ${m}m`;
 }
 
-// ─── ID generator ─────────────────────────────────────────────────────────────
-function nextTripId(trips: Trip[]): string {
-  const nums = trips.map((t) => parseInt(t.id.replace("TR-", "")) || 0);
-  const next = (Math.max(0, ...nums) + 1).toString().padStart(3, "0");
-  return `TR-${next}`;
+function fmtTime(t: string | null): string {
+  if (!t) return "—";
+  return t.slice(0, 5);
 }
+
+function fmtDays(days: Day[]): string {
+  if (!days || days.length === 0) return "—";
+  if (days.length === 7) return "Daily";
+  if (JSON.stringify(days) === JSON.stringify(["Mon","Tue","Wed","Thu","Fri"])) return "Mon–Fri";
+  if (JSON.stringify(days) === JSON.stringify(["Mon","Tue","Wed","Thu","Fri","Sat"])) return "Mon–Sat";
+  if (JSON.stringify(days) === JSON.stringify(["Sat","Sun"])) return "Weekends";
+  return days.join(", ");
+}
+
+function StatCard({
+  icon, bg, value, label, color,
+}: {
+  icon: React.ReactNode; bg: string; value: number; label: string; color: string;
+}) {
+  return (
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
+      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+        {icon}
+      </div>
+      <div>
+        <p className={`text-3xl font-black tracking-tight ${color}`}>{value}</p>
+        <p className="text-sm text-gray-400 font-semibold mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+type FormData = {
+  routeId: number | null;
+  busId: number | null;
+  direction: Direction;
+  departureTime: string;
+  arrivalTime: string;
+  days: Day[];
+  status: TripStatus;
+};
+
+const emptyForm = (): FormData => ({
+  routeId: null,
+  busId: null,
+  direction: "forward",
+  departureTime: "",
+  arrivalTime: "",
+  days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+  status: "scheduled",
+});
+
+const inputCls = "w-full h-10 border border-gray-200 rounded-lg px-3 text-sm outline-none focus:border-[#4CAF8A] focus:ring-1 focus:ring-[#4CAF8A] transition bg-white text-black";
+const labelCls = "block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-widest";
 
 // ═════════════════════════════════════════════════════════════════════════════
 export default function AdminManageTrips() {
   const [trips,        setTrips]        = useState<Trip[]>([]);
+  const [routes,       setRoutes]       = useState<Route[]>([]);
+  const [buses,        setBuses]        = useState<Bus[]>([]);
   const [loading,      setLoading]      = useState(true);
+  const [routesLoading,setRoutesLoading]= useState(false);
+  const [busesLoading, setBusesLoading] = useState(false);
+
   const [search,       setSearch]       = useState("");
-  const [dayFilter,    setDayFilter]    = useState("All days");
   const [statusFilter, setStatusFilter] = useState<TripStatus | "All">("All");
-  const [showModal,    setShowModal]    = useState(false);
-  const [editingTrip,  setEditingTrip]  = useState<Trip | null>(null);
-  const [form,         setForm]         = useState<FormData>(emptyForm());
-  const [formError,    setFormError]    = useState("");
-  const [viewTrip,     setViewTrip]     = useState<Trip | null>(null);
+  const [dirFilter,    setDirFilter]    = useState<Direction | "All">("All");
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
+  const [showModal,   setShowModal]   = useState(false);
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [form,        setForm]        = useState<FormData>(emptyForm());
+  const [formError,   setFormError]   = useState("");
+  const [apiError,    setApiError]    = useState("");
+  const [viewTrip,    setViewTrip]    = useState<Trip | null>(null);
+
   const totalTrips     = trips.length;
-  const activeNow      = trips.filter((t) => t.status === "Active").length;
-  const delayedTrips   = trips.filter((t) => t.status === "Delayed").length;
-  const scheduledTrips = trips.filter((t) => t.status === "Scheduled").length;
+  const activeNow      = trips.filter((t) => t.status === "active").length;
+  const delayedTrips   = trips.filter((t) => t.status === "delayed").length;
+  const scheduledTrips = trips.filter((t) => t.status === "scheduled").length;
 
-  // ── Load ───────────────────────────────────────────────────────────────────
-  const loadData = useCallback(async () => {
+  // ── Load trips ─────────────────────────────────────────────────────────────
+  const loadTrips = useCallback(async () => {
     setLoading(true);
     try {
-      const tripsRes = await apiFetch<any>("/trips");
-      const tripsArr = tripsRes?.trips ?? tripsRes?.data ?? (Array.isArray(tripsRes) ? tripsRes : null);
-      setTrips(tripsArr ?? SAMPLE_TRIPS);
-    } catch {
-      setTrips(SAMPLE_TRIPS);
+      const { data } = await api.get<{ data: { trips: Trip[]; total: number } }>("/trips", {
+        params: { limit: 200 },
+      });
+      setTrips(data.data.trips ?? []);
+    } catch (err: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load trips",
+        text: err.response?.data?.message ?? err.message ?? "Unknown error",
+      });
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // ── Load routes ────────────────────────────────────────────────────────────
+  const loadRoutes = useCallback(async () => {
+    setRoutesLoading(true);
+    try {
+      const { data } = await api.get<{ data: { routes: Route[] } }>("/routes", {
+        params: { limit: 200 },
+      });
+      setRoutes(data.data.routes ?? []);
+    } catch {
+      // non-critical
+    } finally {
+      setRoutesLoading(false);
+    }
+  }, []);
+
+  // ── Load buses ─────────────────────────────────────────────────────────────
+  const loadBuses = useCallback(async () => {
+    setBusesLoading(true);
+    try {
+      const { data } = await api.get<{ data: { buses: Bus[] } }>("/buses", {
+        params: { limit: 200 },
+      });
+      setBuses(data.data.buses ?? []);
+    } catch {
+      // non-critical
+    } finally {
+      setBusesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTrips();
+    loadRoutes();
+    loadBuses();
+  }, [loadTrips, loadRoutes, loadBuses]);
 
   // ── Filter ─────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => trips.filter((t) => {
     const q = search.toLowerCase();
+    const routeName = t.route?.routeName ?? "";
+    const busPlate  = t.bus?.registrationNumber ?? "";
     const matchSearch =
-      t.id.toLowerCase().includes(q) ||
-      t.routeName?.toLowerCase().includes(q) ||
-      t.busId?.toLowerCase().includes(q) ||
-      t.driverName?.toLowerCase().includes(q);
-    const matchDay    = dayFilter === "All days" || t.days === dayFilter;
-    const matchStatus = statusFilter === "All"   || t.status === statusFilter;
-    return matchSearch && matchDay && matchStatus;
-  }), [trips, search, dayFilter, statusFilter]);
+      `TR-${String(t.id).padStart(3, "0")}`.toLowerCase().includes(q) ||
+      routeName.toLowerCase().includes(q) ||
+      busPlate.toLowerCase().includes(q);
+    const matchStatus = statusFilter === "All" || t.status === statusFilter;
+    const matchDir    = dirFilter === "All"    || t.direction === dirFilter;
+    return matchSearch && matchStatus && matchDir;
+  }), [trips, search, statusFilter, dirFilter]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleSave = async () => {
-    if (!form.routeName.trim())  { setFormError("Route name is required."); return; }
-    if (!form.from.trim())       { setFormError("From location is required."); return; }
-    if (!form.to.trim())         { setFormError("To location is required."); return; }
-    if (!form.departure)         { setFormError("Departure time is required."); return; }
-    if (!form.arrival)           { setFormError("Arrival time is required."); return; }
-    if (!form.busId.trim())      { setFormError("Bus ID is required."); return; }
-    if (!form.driverName.trim()) { setFormError("Driver name is required."); return; }
-
-    const payload: Trip = {
-      id:         editingTrip ? editingTrip.id : nextTripId(trips),
-      routeId:    editingTrip?.routeId ?? 0,
-      routeName:  form.routeName,
-      direction:  form.direction,
-      from:       form.from,
-      to:         form.to,
-      departure:  form.departure,
-      arrival:    form.arrival,
-      duration:   calcDuration(form.departure, form.arrival),
-      busId:      form.busId,
-      driverName: form.driverName,
-      days:       form.days,
-      status:     form.status,
-    };
-
-    try {
-      if (editingTrip) {
-        await apiFetch(`/trips/${editingTrip.id}`, { method: "PUT", body: JSON.stringify(payload) });
-      } else {
-        await apiFetch("/trips", { method: "POST", body: JSON.stringify(payload) });
-      }
-    } catch {
-      // API unavailable — update local state directly
-      if (editingTrip) {
-        setTrips((prev) => prev.map((t) => t.id === editingTrip.id ? payload : t));
-      } else {
-        setTrips((prev) => [...prev, payload]);
-      }
-    }
-
-    Swal.fire({
-      icon: "success",
-      title: editingTrip ? "Trip Updated" : "Trip Created",
-      timer: 1500,
-      showConfirmButton: false,
-    });
-    setShowModal(false);
-    setFormError("");
-  };
-
-  const handleDelete = async (trip: Trip) => {
-    const result = await Swal.fire({
-      title: `Delete ${trip.id}?`,
-      text: "This trip schedule will be permanently removed.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Yes, delete",
-      cancelButtonText: "Cancel",
-    });
-    if (!result.isConfirmed) return;
-    try {
-      await apiFetch(`/trips/${trip.id}`, { method: "DELETE" });
-    } catch {
-      // API unavailable — remove locally
-    }
-    setTrips((prev) => prev.filter((t) => t.id !== trip.id));
-    Swal.fire({ icon: "success", title: "Trip Deleted", timer: 1500, showConfirmButton: false });
-  };
-
+  // ── Open modals ────────────────────────────────────────────────────────────
   const openAddModal = () => {
     setEditingTrip(null);
     setForm(emptyForm());
     setFormError("");
+    setApiError("");
     setShowModal(true);
   };
 
   const openEditModal = (trip: Trip) => {
     setEditingTrip(trip);
     setForm({
-      routeName:  trip.routeName,
-      direction:  trip.direction,
-      from:       trip.from,
-      to:         trip.to,
-      departure:  trip.departure,
-      arrival:    trip.arrival,
-      busId:      trip.busId,
-      driverName: trip.driverName,
-      days:       trip.days,
-      status:     trip.status,
+      routeId:       trip.routeId,
+      busId:         trip.busId,
+      direction:     trip.direction,
+      departureTime: fmtTime(trip.departureTime),
+      arrivalTime:   fmtTime(trip.arrivalTime),
+      days:          trip.days ?? [],
+      status:        trip.status,
     });
     setFormError("");
+    setApiError("");
     setShowModal(true);
   };
 
-  // ── Stat card config ───────────────────────────────────────────────────────
-  const statCards = [
-    { icon: <MdDirectionsBus size={36} className="text-[#122843]" />,         val: totalTrips,     label: "Total Trips",  color: "text-black"      },
-    { icon: <FaCheckCircle   size={36} className="text-[#00796b]" />,         val: activeNow,      label: "Active Now",   color: "text-[#00796b]"  },
-    { icon: <FaExclamationTriangle size={36} className="text-yellow-500" />,  val: delayedTrips,   label: "Delayed",      color: "text-yellow-500" },
-    { icon: <FaCalendarAlt   size={36} className="text-blue-500" />,          val: scheduledTrips, label: "Scheduled",    color: "text-blue-500"   },
-  ];
+  const toggleDay = (day: Day) => {
+    setForm((f) => ({
+      ...f,
+      days: f.days.includes(day) ? f.days.filter((d) => d !== day) : [...f.days, day],
+    }));
+  };
 
-  const inputCls = "w-full h-10 border border-gray-200 rounded-lg px-3 text-sm outline-none focus:border-[#4CAF8A] transition text-black";
-  const labelCls = "block text-[10px] uppercase font-black text-gray-400 mb-1";
+  // ── Save ───────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    setFormError(""); setApiError("");
 
+    if (!form.routeId)          { setFormError("Please select a route."); return; }
+    if (!form.busId)            { setFormError("Please select a bus."); return; }
+    if (!form.departureTime)    { setFormError("Departure time is required."); return; }
+    if (!form.arrivalTime)      { setFormError("Arrival time is required."); return; }
+    if (form.days.length === 0) { setFormError("Select at least one operating day."); return; }
+
+    const payload = {
+      routeId:       form.routeId,
+      busId:         form.busId,
+      direction:     form.direction,
+      departureTime: form.departureTime,
+      arrivalTime:   form.arrivalTime,
+      days:          form.days,
+      status:        form.status,
+    };
+
+    try {
+      if (editingTrip) {
+        await api.put(`/trips/${editingTrip.id}`, payload);
+        Swal.fire({ icon: "success", title: "Trip Updated", timer: 1500, showConfirmButton: false });
+      } else {
+        await api.post("/trips", payload);
+        Swal.fire({ icon: "success", title: "Trip Created", timer: 1500, showConfirmButton: false });
+      }
+      await loadTrips();
+      setShowModal(false);
+    } catch (err: any) {
+      setApiError(err.response?.data?.message ?? err.message ?? "Save failed");
+    }
+  };
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  const handleDelete = async (trip: Trip) => {
+    const result = await Swal.fire({
+      title: `Delete TR-${String(trip.id).padStart(3, "0")}?`,
+      text: "This trip schedule will be permanently removed.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, delete",
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await api.delete(`/trips/${trip.id}`);
+      await loadTrips();
+      Swal.fire({ icon: "success", title: "Trip Deleted", timer: 1500, showConfirmButton: false });
+    } catch (err: any) {
+      Swal.fire({ icon: "error", title: err.response?.data?.message ?? err.message ?? "Failed to delete" });
+    }
+  };
+
+  // ── Update status inline ───────────────────────────────────────────────────
+  const handleStatusChange = async (trip: Trip, status: TripStatus) => {
+    try {
+      await api.patch(`/trips/${trip.id}/status`, { status });
+      setTrips((prev) => prev.map((t) => t.id === trip.id ? { ...t, status } : t));
+    } catch (err: any) {
+      Swal.fire({ icon: "error", title: err.response?.data?.message ?? err.message ?? "Failed" });
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-6">
+    <div className="p-6 bg-[#f5f7fa] min-h-full">
 
       {/* ── STAT CARDS ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {statCards.map(({ icon, val, label, color }) => (
-          <div key={label} className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4 border border-gray-100">
-            <div className="w-12 h-12 flex items-center justify-center">{icon}</div>
-            <div>
-              <p className={`text-3xl font-extrabold ${color}`}>{val}</p>
-              <p className="text-[#94a0ae] text-sm">{label}</p>
-            </div>
-          </div>
-        ))}
+        <StatCard
+          icon={<MdDirectionsBus className="w-6 h-6 text-blue-500" />}
+          bg="bg-blue-50" value={totalTrips} label="Total Trips" color="text-blue-600" />
+        <StatCard
+          icon={<FaCheckCircle className="w-6 h-6 text-emerald-500" />}
+          bg="bg-emerald-50" value={activeNow} label="Active Now" color="text-emerald-600" />
+        <StatCard
+          icon={<FaExclamationTriangle className="w-6 h-6 text-yellow-500" />}
+          bg="bg-yellow-50" value={delayedTrips} label="Delayed" color="text-yellow-600" />
+        <StatCard
+          icon={<FaCalendarAlt className="w-6 h-6 text-indigo-500" />}
+          bg="bg-indigo-50" value={scheduledTrips} label="Scheduled" color="text-indigo-600" />
       </div>
 
       {/* ── TOOLBAR ── */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex items-center gap-2 bg-white border border-[#828282]/40 rounded-lg px-3 py-2 w-72 shadow-sm">
-          <FiSearch className="w-5 h-5 text-gray-400 opacity-50" />
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 w-64 shadow-sm">
+          <IoSearch className="w-4 h-4 text-gray-400 flex-shrink-0" />
           <input
             type="text"
-            placeholder="Search route or bus..."
-            className="flex-1 text-sm bg-transparent outline-none text-black"
+            placeholder="Search trip ID, route or bus…"
+            className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
         <select
-          className="h-10 border border-[#828282]/40 rounded-lg px-3 bg-white text-sm text-black cursor-pointer shadow-sm"
-          value={dayFilter}
-          onChange={(e) => setDayFilter(e.target.value)}
-        >
-          {DAY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-
-        <select
-          className="h-10 border border-[#828282]/40 rounded-lg px-3 bg-white text-sm text-black cursor-pointer shadow-sm"
+          className="h-10 border border-gray-200 rounded-xl px-3 bg-white text-sm text-gray-700 shadow-sm outline-none cursor-pointer"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as TripStatus | "All")}
         >
           <option value="All">All Status</option>
-          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+          ))}
+        </select>
+
+        <select
+          className="h-10 border border-gray-200 rounded-xl px-3 bg-white text-sm text-gray-700 shadow-sm outline-none cursor-pointer"
+          value={dirFilter}
+          onChange={(e) => setDirFilter(e.target.value as Direction | "All")}
+        >
+          <option value="All">All Directions</option>
+          <option value="forward">Forward</option>
+          <option value="return">Return</option>
         </select>
 
         <button
           onClick={openAddModal}
-          className="ml-auto h-10 bg-[#4CAF8A] text-white font-semibold px-6 rounded-lg hover:bg-[#3d9e7a] transition shadow-md"
+          className="ml-auto h-10 bg-[#f5a623] hover:bg-[#e09510] active:scale-95 text-white font-bold px-5 rounded-xl transition-all shadow-sm text-sm flex items-center gap-2"
         >
-          + Add trip
+          <IoAddCircle className="w-4 h-4" />
+          Add Trip
         </button>
       </div>
 
       {/* ── TABLE ── */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-        <div className="grid grid-cols-12 bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-700 border-b uppercase tracking-wider">
-          <div className="col-span-1">Trip ID</div>
-          <div className="col-span-2">Route</div>
-          <div className="col-span-2">Direction</div>
-          <div className="col-span-1">Departure</div>
-          <div className="col-span-1">Arrival</div>
-          <div className="col-span-1">Duration</div>
-          <div className="col-span-1">Bus</div>
-          <div className="col-span-1">Driver</div>
-          <div className="col-span-1">Days</div>
-          <div className="col-span-1">Status</div>
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+
+        <div className="grid grid-cols-[110px_160px_130px_100px_100px_100px_150px_110px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+          <div>Trip ID</div>
+          <div>Route</div>
+          <div>Bus</div>
+          <div>Departure</div>
+          <div>Arrival</div>
+          <div>Duration</div>
+          <div>Days</div>
+          <div>Status</div>
+          <div className="text-center">Actions</div>
         </div>
 
         {loading ? (
-          <div className="p-20 text-center text-gray-400 text-sm">Loading trips...</div>
-        ) : filtered.length === 0 ? (
-          <div className="p-20 text-center text-gray-400 text-sm">No trips found.</div>
-        ) : filtered.map((trip) => (
-          <div
-            key={trip.id}
-            className="grid grid-cols-12 items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition"
-          >
-            <div className="col-span-1 font-semibold text-gray-500">{trip.id}</div>
-            <div className="col-span-2 font-semibold text-[#122843]">{trip.routeName}</div>
-            <div className="col-span-2 text-xs">
-              <span className="font-semibold text-gray-700">{trip.from}</span>
-              <span className="mx-1 text-gray-400">-&gt;</span>
-              <span className="font-semibold text-gray-700">{trip.to}</span>
-            </div>
-            <div className="col-span-1 font-mono font-semibold text-gray-700">{trip.departure}</div>
-            <div className="col-span-1 font-mono font-semibold text-gray-700">{trip.arrival}</div>
-            <div className="col-span-1 text-gray-500 text-xs">{trip.duration}</div>
-            <div className="col-span-1 text-xs font-medium text-gray-600">{trip.busId}</div>
-            <div className="col-span-1 text-xs font-medium text-gray-600 truncate">{trip.driverName}</div>
-            <div className="col-span-1 text-xs text-gray-500">{trip.days}</div>
-            <div className="col-span-1 flex items-center gap-1.5 flex-wrap">
-              <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${STATUS_STYLES[trip.status]}`}>
-                {trip.status}
-              </span>
-              <button
-                onClick={() => setViewTrip(trip)}
-                className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 shadow-sm transition"
-              >
-                <IoEye size={18} className="text-blue-500" />
-              </button>
-              <button
-                onClick={() => openEditModal(trip)}
-                className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center hover:bg-amber-100 shadow-sm transition"
-              >
-                <FiEdit2 size={15} className="text-amber-500" />
-              </button>
-              <button
-                onClick={() => handleDelete(trip)}
-                className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 shadow-sm transition"
-              >
-                <CgClose size={16} className="text-red-400" />
-              </button>
-            </div>
+          <div className="flex items-center justify-center py-24 gap-3 text-gray-400">
+            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm font-semibold">Loading trips…</span>
           </div>
-        ))}
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-gray-400 gap-2">
+            <MdDirectionsBus className="w-8 h-8 opacity-30" />
+            <p className="text-sm font-semibold">No trips found.</p>
+          </div>
+        ) : (
+          filtered.map((trip, idx) => (
+            <div
+              key={trip.id}
+              className={`grid grid-cols-[110px_160px_130px_100px_100px_100px_150px_110px_116px] items-center px-5 py-3.5 border-b transition-colors duration-150 ${
+                idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+              } hover:bg-blue-50/30`}
+            >
+              <div className="font-mono text-[11px] font-bold text-gray-400 tracking-wider">
+                {`TR-${String(trip.id).padStart(3, "0")}`}
+              </div>
+
+              <div className="pr-2 min-w-0">
+                <p className="font-semibold text-gray-800 text-[13px] truncate">
+                  {trip.route?.routeName ?? "—"}
+                </p>
+                {trip.route && (
+                  <p className="text-[10px] text-gray-400 truncate">
+                    {trip.direction === "forward"
+                      ? `${trip.route.from} → ${trip.route.to}`
+                      : `${trip.route.to} → ${trip.route.from}`}
+                  </p>
+                )}
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-700 truncate">
+                  {trip.bus?.registrationNumber ?? "—"}
+                </p>
+                {trip.bus && (
+                  <p className="text-[10px] text-gray-400">{trip.bus.busType}</p>
+                )}
+              </div>
+
+              <div className="font-mono font-semibold text-gray-700 text-sm">
+                {fmtTime(trip.departureTime)}
+              </div>
+              <div className="font-mono font-semibold text-gray-700 text-sm">
+                {fmtTime(trip.arrivalTime)}
+              </div>
+              <div>
+                <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 text-[11px] font-bold px-2 py-1 rounded-md">
+                  ⏱ {displayDuration(trip)}
+                </span>
+              </div>
+
+              <div className="text-xs text-gray-500 font-medium pr-2">
+                {fmtDays(trip.days)}
+              </div>
+
+              <div>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide ${STATUS_STYLES[trip.status]}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[trip.status]}`} />
+                  {trip.status}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-center gap-1.5">
+                <button
+                  onClick={() => setViewTrip(trip)}
+                  title="View details"
+                  className="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-500 hover:text-blue-700 flex items-center justify-center transition-all active:scale-90"
+                >
+                  <IoEye className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => openEditModal(trip)}
+                  title="Edit trip"
+                  className="w-8 h-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-500 hover:text-amber-700 flex items-center justify-center transition-all active:scale-90"
+                >
+                  <IoPencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(trip)}
+                  title="Delete trip"
+                  className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 flex items-center justify-center transition-all active:scale-90"
+                >
+                  <CgClose className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
-      {/* ── ADD / EDIT MODAL ── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          ADD / EDIT MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-7 w-full max-w-lg mx-4 relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 relative max-h-[92vh] overflow-y-auto">
+
             <button
-              className="absolute right-4 top-4 text-gray-400 hover:text-red-500 transition"
               onClick={() => setShowModal(false)}
-            >
-              <CgClose size={20} />
-            </button>
+              className="absolute right-5 top-5 w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition font-black text-sm"
+            >✕</button>
 
-            <h2 className="text-xl font-bold text-[#122843] mb-5 flex items-center gap-3">
-              <MdSchedule size={32} className="text-[#122843]" />
-              {editingTrip ? `Update ${editingTrip.id}` : "New Trip Schedule"}
-            </h2>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-[#122843] flex items-center justify-center flex-shrink-0">
+                <MdSchedule className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-[#122843] tracking-tight">
+                  {editingTrip ? `Update TR-${String(editingTrip.id).padStart(3,"0")}` : "New Trip Schedule"}
+                </h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">
+                  {editingTrip ? "Edit trip details" : "Schedule a new trip"}
+                </p>
+              </div>
+            </div>
 
-            {formError && (
-              <div className="mb-4 text-xs font-bold text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
-                {formError}
+            {(formError || apiError) && (
+              <div className="mb-5 flex items-start gap-2 text-xs font-semibold text-red-600 bg-red-50 p-3.5 rounded-xl border border-red-100">
+                <span className="mt-0.5">⚠</span>
+                <span>{formError || apiError}</span>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
-              {/* Route Name */}
+
               <div className="col-span-2">
-                <label className={labelCls}>Route Name</label>
-                <input
-                  type="text"
+                <label className={labelCls}>Route</label>
+                <select
                   className={inputCls}
-                  placeholder="e.g. Route 120"
-                  value={form.routeName}
-                  onChange={(e) => setForm({ ...form, routeName: e.target.value })}
-                />
+                  value={form.routeId ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, routeId: e.target.value ? parseInt(e.target.value) : null }))}
+                >
+                  <option value="">— Select a route —</option>
+                  {routesLoading && <option disabled>Loading routes…</option>}
+                  {!routesLoading && routes.length === 0 && <option disabled>No routes available</option>}
+                  {routes.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.routeName} · {r.from} → {r.to}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Direction */}
+              <div className="col-span-2">
+                <label className={labelCls}>Bus</label>
+                <select
+                  className={inputCls}
+                  value={form.busId ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, busId: e.target.value ? parseInt(e.target.value) : null }))}
+                >
+                  <option value="">— Select a bus —</option>
+                  {busesLoading && <option disabled>Loading buses…</option>}
+                  {!busesLoading && buses.length === 0 && <option disabled>No buses available</option>}
+                  {buses.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.registrationNumber} · {b.busType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="col-span-2">
                 <label className={labelCls}>Direction</label>
                 <div className="flex gap-3">
-                  {DIRECTION_OPTIONS.map((d) => (
+                  {(["forward", "return"] as Direction[]).map((d) => (
                     <button
                       key={d}
                       type="button"
-                      onClick={() => setForm({ ...form, direction: d })}
+                      onClick={() => setForm((f) => ({ ...f, direction: d }))}
                       className={`flex-1 h-10 rounded-lg border-2 text-sm font-bold transition ${
                         form.direction === d
                           ? "border-[#4CAF8A] bg-[#4CAF8A]/10 text-[#4CAF8A]"
                           : "border-gray-200 text-gray-500 hover:border-gray-300"
                       }`}
                     >
-                      {d === "Forward" ? "Forward" : "Return"}
+                      {d === "forward" ? "⬆ Forward" : "⬇ Return"}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* From */}
-              <div>
-                <label className={labelCls}>From</label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. Colombo Fort"
-                  value={form.from}
-                  onChange={(e) => setForm({ ...form, from: e.target.value })}
-                />
-              </div>
-
-              {/* To */}
-              <div>
-                <label className={labelCls}>To</label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. Kesbewa"
-                  value={form.to}
-                  onChange={(e) => setForm({ ...form, to: e.target.value })}
-                />
-              </div>
-
-              {/* Departure */}
               <div>
                 <label className={labelCls}>Departure Time</label>
                 <input
                   type="time"
                   className={inputCls}
-                  value={form.departure}
-                  onChange={(e) => setForm({ ...form, departure: e.target.value })}
+                  value={form.departureTime}
+                  onChange={(e) => setForm((f) => ({ ...f, departureTime: e.target.value }))}
                 />
               </div>
 
-              {/* Arrival */}
               <div>
                 <label className={labelCls}>Arrival Time</label>
                 <input
                   type="time"
                   className={inputCls}
-                  value={form.arrival}
-                  onChange={(e) => setForm({ ...form, arrival: e.target.value })}
+                  value={form.arrivalTime}
+                  onChange={(e) => setForm((f) => ({ ...f, arrivalTime: e.target.value }))}
                 />
               </div>
 
-              {/* Duration (auto) */}
-              <div>
-                <label className={labelCls}>Duration <span className="text-[#4CAF8A] normal-case font-semibold">(auto)</span></label>
+              <div className="col-span-2">
+                <label className={labelCls}>
+                  Duration <span className="text-[#4CAF8A] normal-case font-semibold">(auto)</span>
+                </label>
                 <div className="w-full h-10 border border-dashed border-gray-300 rounded-lg px-3 text-sm flex items-center text-gray-500 bg-gray-50">
-                  {calcDuration(form.departure, form.arrival)}
+                  {calcDuration(form.departureTime, form.arrivalTime)}
                 </div>
               </div>
 
-              {/* Operating Days */}
-              <div>
+              <div className="col-span-2">
                 <label className={labelCls}>Operating Days</label>
-                <select
-                  className={inputCls}
-                  value={form.days}
-                  onChange={(e) => setForm({ ...form, days: e.target.value })}
-                >
-                  {DAY_OPTIONS.filter((d) => d !== "All days").map((d) => (
-                    <option key={d} value={d}>{d}</option>
+                <div className="flex gap-1.5 flex-wrap">
+                  {ALL_DAYS.map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleDay(day)}
+                      className={`w-12 h-10 rounded-lg text-xs font-bold border-2 transition ${
+                        form.days.includes(day)
+                          ? "border-[#122843] bg-[#122843] text-white"
+                          : "border-gray-200 text-gray-400 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      {day}
+                    </button>
                   ))}
-                </select>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {[
+                    { label: "Mon–Fri", days: ["Mon","Tue","Wed","Thu","Fri"] as Day[] },
+                    { label: "Mon–Sat", days: ["Mon","Tue","Wed","Thu","Fri","Sat"] as Day[] },
+                    { label: "Daily",   days: [...ALL_DAYS] as Day[] },
+                    { label: "Clear",   days: [] as Day[] },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, days: preset.days }))}
+                      className="px-3 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-500 text-[10px] font-bold transition"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Bus ID */}
-              <div>
-                <label className={labelCls}>Bus ID</label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. CP NB-1234"
-                  value={form.busId}
-                  onChange={(e) => setForm({ ...form, busId: e.target.value })}
-                />
-              </div>
-
-              {/* Driver */}
-              <div>
-                <label className={labelCls}>Driver Name</label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. Kasun Silva"
-                  value={form.driverName}
-                  onChange={(e) => setForm({ ...form, driverName: e.target.value })}
-                />
-              </div>
-
-              {/* Status */}
               <div className="col-span-2">
                 <label className={labelCls}>Status</label>
                 <select
                   className={inputCls}
                   value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value as TripStatus })}
+                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as TripStatus }))}
                 >
-                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                  ))}
                 </select>
               </div>
             </div>
 
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-8 flex justify-end gap-3">
               <button
-                className="px-5 py-2 rounded-lg bg-gray-100 font-bold text-gray-600 text-sm hover:bg-gray-200 transition"
                 onClick={() => setShowModal(false)}
+                className="px-5 py-2 rounded-xl bg-gray-100 font-bold text-gray-600 text-sm hover:bg-gray-200 transition"
               >
                 Discard
               </button>
               <button
-                className="px-8 py-2 rounded-lg bg-[#122843] text-white font-bold text-sm shadow-lg hover:bg-[#1a3a5c] transition"
                 onClick={handleSave}
+                className="px-8 py-2 rounded-xl bg-[#122843] text-white font-bold text-sm shadow-lg hover:bg-[#1a3a5c] transition active:scale-95"
               >
-                Save Trip
+                {editingTrip ? "Save Changes" : "Create Trip"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── VIEW MODAL ── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          VIEW MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
       {viewTrip && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-lg mx-4 shadow-2xl p-7 relative max-h-[90vh] overflow-y-auto">
+
             <button
-              className="absolute right-4 top-4 text-gray-400 hover:text-red-500 transition"
               onClick={() => setViewTrip(null)}
-            >
-              <CgClose size={20} />
-            </button>
+              className="absolute right-5 top-5 w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition font-black text-sm"
+            >✕</button>
 
-            <h2 className="text-xl font-bold text-[#122843] mb-6 flex items-center gap-3">
-              <MdSchedule size={32} className="text-[#122843]" />
-              Trip Info: {viewTrip.id}
-            </h2>
-
-            <div className="grid grid-cols-2 gap-5 bg-gray-50/50 p-5 rounded-xl border border-gray-100 mb-4">
-              {[
-                ["Trip ID",   viewTrip.id],
-                ["Route",     viewTrip.routeName],
-                ["Direction", viewTrip.direction],
-                ["From",      viewTrip.from],
-                ["To",        viewTrip.to],
-                ["Departure", viewTrip.departure],
-                ["Arrival",   viewTrip.arrival],
-                ["Duration",  viewTrip.duration],
-                ["Bus",       viewTrip.busId],
-                ["Driver",    viewTrip.driverName],
-                ["Days",      viewTrip.days],
-              ].map(([label, val]) => (
-                <div key={label}>
-                  <p className="text-[10px] uppercase font-black text-gray-400 mb-1">{label}</p>
-                  <p className="font-bold text-gray-800">{val}</p>
-                </div>
-              ))}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 rounded-xl bg-[#122843] flex items-center justify-center flex-shrink-0">
+                <MdSchedule className="w-7 h-7 text-white" />
+              </div>
               <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 mb-2">Status</p>
-                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase shadow-sm ${STATUS_STYLES[viewTrip.status]}`}>
+                <h2 className="text-xl font-black text-[#122843] tracking-tight">
+                  Trip Info: {`TR-${String(viewTrip.id).padStart(3, "0")}`}
+                </h2>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide mt-1 ${STATUS_STYLES[viewTrip.status]}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[viewTrip.status]}`} />
                   {viewTrip.status}
                 </span>
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="grid grid-cols-2 gap-5 bg-gray-50/80 p-5 rounded-xl border border-gray-100 mb-4">
+              {[
+                ["Trip ID",    `TR-${String(viewTrip.id).padStart(3, "0")}`],
+                ["Route",      viewTrip.route?.routeName ?? "—"],
+                ["Direction",  viewTrip.direction === "forward" ? "⬆ Forward" : "⬇ Return"],
+                ["From",       viewTrip.direction === "forward" ? (viewTrip.route?.from ?? "—") : (viewTrip.route?.to ?? "—")],
+                ["To",         viewTrip.direction === "forward" ? (viewTrip.route?.to ?? "—") : (viewTrip.route?.from ?? "—")],
+                ["Bus Plate",  viewTrip.bus?.registrationNumber ?? "—"],
+                ["Bus Type",   viewTrip.bus?.busType ?? "—"],
+                ["Departure",  fmtTime(viewTrip.departureTime)],
+                ["Arrival",    fmtTime(viewTrip.arrivalTime)],
+                ["Duration",   displayDuration(viewTrip)],
+                ["Days",       fmtDays(viewTrip.days)],
+              ].map(([label, val]) => (
+                <div key={label}>
+                  <p className="text-[10px] uppercase font-black text-gray-400 mb-1 tracking-widest">{label}</p>
+                  <p className="font-bold text-gray-800 text-sm">{val}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mb-4">
+              <p className={`${labelCls} mb-2`}>Update Status</p>
+              <div className="flex flex-wrap gap-2">
+                {STATUS_OPTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      handleStatusChange(viewTrip, s);
+                      setViewTrip((prev) => prev ? { ...prev, status: s } : null);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition border-2 ${
+                      viewTrip.status === s
+                        ? "border-[#122843] bg-[#122843] text-white"
+                        : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <button
+                onClick={() => { setViewTrip(null); openEditModal(viewTrip); }}
+                className="px-5 py-2.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl text-sm font-bold hover:bg-amber-100 transition flex items-center gap-2"
+              >
+                <IoPencil className="w-3.5 h-3.5" /> Edit Trip
+              </button>
               <button
                 onClick={() => setViewTrip(null)}
-                className="px-10 py-2.5 bg-[#122843] text-white rounded-xl text-sm font-bold shadow-xl hover:bg-[#1a3a5c] transition"
+                className="px-10 py-2.5 bg-[#122843] text-white rounded-xl text-sm font-bold shadow-xl hover:bg-[#1a3a5c] transition active:scale-95"
               >
                 Close
               </button>
