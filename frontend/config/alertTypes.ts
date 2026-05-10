@@ -87,3 +87,21 @@ export const ALERT_LABEL_MAP: Record<AlertTypeValue, string> = ALERT_TYPE_OPTION
 	(acc, option) => ({ ...acc, [option.value]: option.label }),
 	{} as Record<AlertTypeValue, string>,
 );
+
+export const ALERT_TYPE_TO_BACKEND: Record<AlertTypeValue, string> = {
+	"Service-Distruption": "service distruption",
+	"Road-Block": "road block",
+	Delay: "delay",
+	Accident: "accident",
+	Breakdown: "breakdown",
+	Weather: "weather",
+	"Not-Operating": "not operating",
+	"Heavy-Rain": "heavy rain",
+	"Damaged-Roads": "damaged roads",
+	"Rule-Enforcement": "rule enforcement",
+	"New-Bus-Stop": "new bus stop",
+	"Removed-Bus-Stop": "removed bus stop",
+	"Route-Change": "route change",
+	"Public-Events": "public events",
+	Other: "other",
+};
