@@ -23,7 +23,7 @@ const menus = {
   passenger: [
     { id: "live", label: "Live Tracking", icon: <img src="/icons/liveTracking.png" alt="Live Tracking" className="h-7 w-7 object-contain" />, path: "/passenger/liveTracking" },
     { id: "route", label: "Route Finder", icon: <img src="/icons/map.png" alt="Route Finder" className="h-7 w-7 object-contain" />, path: "/passenger/routeFinder" },
-    { id: "news", label: "News Feed", icon: <img src="/icons/NewsPaper.png" alt="News Feed" className="h-7 w-7 object-contain" />, path: "/passenger/newsFeed" },
+    { id: "news", label: "News Feed", icon: <img src="/icons/newspaper.png" alt="News Feed" className="h-7 w-7 object-contain" />, path: "/passenger/newsFeed" },
     { id: "alerts", label: "Alerts", icon: <img src="/icons/alarm.png" alt="Alarm" className="h-7 w-7 object-contain" />, path: "/passenger/alerts" },
     { id: "lost", label: "Lost & Found", icon: <img src="/icons/lostFound.png" alt="Search Location" className="h-7 w-7 object-contain" />, path: "/passenger/lost&found" },
     { id: "complaints", label: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaint" className="h-7 w-7 object-contain" />, path: "/passenger/complaint" },
@@ -100,18 +100,22 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
 
         {/* Menu */}
         <div className="flex flex-col mt-3 space-y-2 px-2">
-          {items.map((item) => (
-            <SidebarItem
-              key={item.id}
-              label={item.label}
-              icon={item.icon}
-              active={item.path ? pathname === item.path : false}
-              badgeCount={role === "passenger" && item.id === "alerts" && unreadPassengerAlerts > 0 ? unreadPassengerAlerts : undefined}
-              onClick={() => {
-                if (item.path) router.push(item.path);
-              }}
-            />
-          ))}
+          {items.map((item) => {
+            const isPassengerAlerts = role === "passenger" && item.id === "alerts";
+
+            return (
+              <SidebarItem
+                key={item.id}
+                label={item.label}
+                icon={item.icon}
+                active={item.path ? pathname === item.path : false}
+                badgeCount={isPassengerAlerts ? unreadPassengerAlerts : undefined}
+                onClick={() => {
+                  if (item.path) router.push(item.path);
+                }}
+              />
+            );
+          })}
         </div>
 
         {/* Footer */}
@@ -140,7 +144,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
                 }}
                 className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-gray-700 transition"
               >
-                <img src="/profile-placeholder.png" alt="Profile" className="w-10 h-10 rounded-full object-cover mr-4" />
+                <img src="/default-profile-image.svg" alt="Profile" className="w-10 h-10 rounded-full object-cover mr-4" />
                 <div className="text-left">
                   <p className="font-semibold">User Name</p>
                   <p className="text-sm text-gray-400 capitalize">{role}</p>

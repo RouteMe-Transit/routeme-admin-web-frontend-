@@ -42,14 +42,36 @@ export default function AlertHistoryViewModal({ item, onClose }: AlertHistoryVie
                     <p>
                         <strong>Affected Route:</strong> {item.affectedRoute}
                     </p>
+                    {item.affectedBus && (
+                        <p>
+                            <strong>Affected Bus:</strong> {item.affectedBus}
+                        </p>
+                    )}
                     {item.scheduledAt && (
                         <p>
                             <strong>Scheduled for:</strong> {item.scheduledAt}
                         </p>
                     )}
+                    {item.sentAt && (
+                        <p>
+                            <strong>Sent At:</strong> {item.sentAt}
+                        </p>
+                    )}
                     <p>
                         <strong>Created:</strong> {item.timestamp}
                     </p>
+                    {item.createdBy && (
+                        <div>
+                            <p>
+                                <strong>Created By:</strong>
+                            </p>
+                            <div className="ml-4 text-sm text-gray-700">
+                                <p><strong>Type:</strong> {item.createdBy.type}</p>
+                                <p><strong>ID:</strong> {item.createdBy.id}</p>
+                                <p><strong>Name:</strong> {item.createdBy.name}</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-5 rounded-md bg-gray-100 p-4">
