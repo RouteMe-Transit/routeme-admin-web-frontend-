@@ -1,53 +1,462 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import axios from "axios";
 import {
   ALERT_LABEL_MAP,
   ALERT_STYLE_MAP,
   ALERT_TYPE_OPTIONS,
+  ALERT_TYPE_TO_BACKEND,
   AlertTypeValue,
 } from "@/config/alertTypes";
-import AlertHistoryItemCard from "./AlertHistoryItemCard";
-import AlertHistoryViewModal from "./AlertHistoryViewModal";
 import { FaEye } from "react-icons/fa6";
-import AlertPreviewModal from "./AlertPreviewModal";
-import AlertScheduleModal from "./AlertScheduleModal";
-import type { AlertHistoryItem, AlertHistoryStatus } from "./types";
+import { FaXmark } from "react-icons/fa6";
+import { IoEye } from "react-icons/io5";
+import api from "@/app/services/api";
 
-const initialAlertHistory: AlertHistoryItem[] = [
-  {
-    id: 1,
-    title: "Roadblock on A2",
-    description: "Roadblock due to accident near junction, expect delays.",
-    type: "Service-Distruption",
-    status: "published",
-    targetAudience: "All Passengers",
-    affectedRoute: "100",
-    affectedBus: "NA-1876",
-    timestamp: new Date().toISOString(),
-    sentAt: new Date().toISOString(),
-    createdBy: { type: "bus", id: "bus-42", name: "Driver 42" },
-  },
-  {
-    id: 2,
-    title: "Weather delay on 103",
-    description: "Heavy rain causing delays on route 103.",
-    type: "Service-Distruption",
-    status: "scheduled",
-    targetAudience: "Route 103",
-    affectedRoute: "103",
-    affectedBus: "",
-    timestamp: new Date().toISOString(),
-    scheduledAt: new Date(Date.now() + 3600 * 1000).toISOString(),
-    createdBy: { type: "admin", id: "admin-1", name: "System Admin" },
-  },
-];
+const ALERT_TYPE_VALUE_SET = new Set<string>(ALERT_TYPE_OPTIONS.map((option) => option.value));
+
+type BackendAlert = {
+  id?: string | number;
+  _id?: string;
+  alertId?: string | number;
+  title?: string;
+  description?: string;
+  type?: string;
+  alertType?: string;
+  status?: string;
+  targetAudience?: string;
+  targetRoute?: string;
+  affectedRoute?: string;
+  route?: string;
+  affectedBus?: string;
+  busNumber?: string;
+  createdAt?: string;
+  timestamp?: string;
+  scheduledAt?: string;
+  sentAt?: string;
+  createdBy?: {
+    type?: string;
+    id?: string | number;
+    name?: string;
+  };
+};
+
+type BackendRoute = {
+  id?: number | string;
+  routeName?: string;
+  routeNumber?: string;
+  from?: string;
+  to?: string;
+};
+
+type AlertHistoryStatus = "published" | "scheduled";
+
+type CreatedBy = {
+  type: "admin" | "bus" | string;
+  id: string | number;
+  name: string;
+};
+
+type AlertHistoryItem = {
+  id: string | number;
+  title: string;
+  description: string;
+  type: AlertTypeValue;
+  status: AlertHistoryStatus;
+  targetAudience: string;
+  affectedRoute: string;
+  affectedBus?: string;
+  timestamp: string;
+  scheduledAt?: string;
+  sentAt?: string;
+  createdBy?: CreatedBy;
+};
+
+type AlertHistoryViewModalProps = {
+  item: AlertHistoryItem | null;
+  onClose: () => void;
+};
+
+function AlertHistoryViewModal({ item, onClose }: AlertHistoryViewModalProps) {
+  if (!item) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="relative mx-4 w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
+        <button
+          type="button"
+          aria-label="Close history alert preview"
+          className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white"
+          onClick={onClose}
+        >
+          <FaXmark />
+        </button>
+
+        <h3 className="mb-5 text-lg font-bold text-gray-800">Alert Details</h3>
+
+        <div className="space-y-2 text-sm text-gray-700">
+          <p>
+            <strong>Title:</strong> {item.title}
+          </p>
+          <p>
+            <strong>Type:</strong> {ALERT_LABEL_MAP[item.type]}
+          </p>
+          <p>
+            <strong>Status:</strong> {item.status}
+          </p>
+          <p>
+            <strong>Target:</strong> {item.targetAudience}
+          </p>
+          <p>
+            <strong>Affected Route:</strong> {item.affectedRoute}
+          </p>
+          {item.affectedBus && (
+            <p>
+              <strong>Affected Bus:</strong> {item.affectedBus}
+            </p>
+          )}
+          {item.scheduledAt && (
+            <p>
+              <strong>Scheduled for:</strong> {item.scheduledAt}
+            </p>
+          )}
+          {item.sentAt && (
+            <p>
+              <strong>Sent At:</strong> {item.sentAt}
+            </p>
+          )}
+          <p>
+            <strong>Created:</strong> {item.timestamp}
+          </p>
+          {item.createdBy && (
+            <div>
+              <p>
+                <strong>Created By:</strong>
+              </p>
+              <div className="ml-4 text-sm text-gray-700">
+                <p>
+                  <strong>Type:</strong> {item.createdBy.type}
+                </p>
+                <p>
+                  <strong>ID:</strong> {item.createdBy.id}
+                </p>
+                <p>
+                  <strong>Name:</strong> {item.createdBy.name}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 rounded-md bg-gray-100 p-4">
+          <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Description</p>
+          <p className="whitespace-pre-wrap wrap-break-word text-sm text-gray-700">{item.description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type AlertPreviewModalProps = {
+  open: boolean;
+  onClose: () => void;
+  previewCardClass: string;
+  selectedAlertLabel: string;
+  affectedRoute: string;
+  affectedBus: string;
+  alertTitle: string;
+  description: string;
+  isPublicAlert: boolean;
+  targetRoute: string;
+};
+
+function AlertPreviewModal({
+  open,
+  onClose,
+  previewCardClass,
+  selectedAlertLabel,
+  affectedRoute,
+  affectedBus,
+  alertTitle,
+  description,
+  isPublicAlert,
+  targetRoute,
+}: AlertPreviewModalProps) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="relative mx-4 max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-8 shadow-lg">
+        <button
+          type="button"
+          aria-label="Close preview"
+          className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-2xl text-red-500 hover:bg-red-500 hover:text-white"
+          onClick={onClose}
+        >
+          <FaXmark />
+        </button>
+        <h2 className="mb-6 text-xl font-bold">Alert Preview</h2>
+
+        <div className="mb-6 space-y-4">
+          <div className={`rounded border-l-4 p-4 ${previewCardClass}`}>
+            <p className="wrap-break-word text-sm text-gray-600">
+              <strong>Alert Type:</strong> {selectedAlertLabel}
+            </p>
+            <p className="mt-2 wrap-break-word text-sm text-gray-600">
+              <strong>Affected Route:</strong> {affectedRoute || "N/A"}
+            </p>
+            <p className="mt-2 wrap-break-word text-sm text-gray-600">
+              <strong>Affected Bus:</strong> {affectedBus || "N/A"}
+            </p>
+            <p className="mt-3 wrap-break-word text-base font-bold text-gray-700">{alertTitle || "(No title entered)"}</p>
+            <p className="mt-3 whitespace-pre-wrap wrap-break-word text-gray-700">{description || "(No description entered)"}</p>
+            <p className="mt-4 wrap-break-word text-sm text-gray-600">
+              <strong>Target Audience:</strong> {isPublicAlert ? "All Passengers" : targetRoute || "Not selected"}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type AlertScheduleModalProps = {
+  open: boolean;
+  scheduleAt: string;
+  onScheduleAtChange: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function AlertScheduleModal({
+  open,
+  scheduleAt,
+  onScheduleAtChange,
+  onCancel,
+  onConfirm,
+}: AlertScheduleModalProps) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="relative mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+        <h3 className="mb-4 text-lg font-bold">Schedule Alert</h3>
+        <label className="mb-2 block text-sm font-semibold">Select Date and time</label>
+        <input
+          type="datetime-local"
+          value={scheduleAt}
+          onChange={(e) => onScheduleAtChange(e.target.value)}
+          className="h-10 w-full rounded-md border border-[#828282] px-2"
+        />
+        <div className="mt-5 flex justify-end gap-3">
+          <button type="button" className="rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={scheduleAt.trim() === ""}
+            className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+            onClick={onConfirm}
+          >
+            Confirm Schedule
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type AlertHistoryItemCardProps = {
+  item: AlertHistoryItem;
+  onView: (item: AlertHistoryItem) => void;
+};
+
+function AlertHistoryItemCard({ item, onView }: AlertHistoryItemCardProps) {
+  return (
+    <div className={`rounded-md border-l-4 p-3 shadow-sm ${ALERT_STYLE_MAP[item.type].cardClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-gray-800">{item.title}</p>
+          <p className="text-xs text-gray-500">{ALERT_LABEL_MAP[item.type]}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onView(item)}
+            className="alert-history-view-button flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition hover:bg-blue-100"
+            aria-label="View full alert"
+            title="View full alert"
+          >
+            <IoEye size={16} />
+          </button>
+          <span
+            className={`shrink-0 rounded-full border px-2 py-1 text-xs font-semibold ${
+              item.status === "published"
+                ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                : "border-amber-300 bg-amber-100 text-amber-700"
+            }`}
+          >
+            {item.status}
+          </span>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-gray-600">Target: {item.targetAudience}</p>
+      <p className="mt-1 text-xs text-gray-600">Affected Route: {item.affectedRoute}</p>
+      {item.scheduledAt && <p className="mt-1 text-xs text-gray-600">Scheduled for: {item.scheduledAt}</p>}
+      <p className="mt-1 text-xs text-gray-500">{item.timestamp}</p>
+    </div>
+  );
+}
+
+const getAuthConfig = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  };
+};
+
+const normalizeAlertType = (value?: string): AlertTypeValue => {
+  if (!value) {
+    return "Other";
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  // Backend values with spaces
+  if (normalized === "delay") {
+    return "Delay";
+  }
+
+  if (normalized === "accident") {
+    return "Accident";
+  }
+
+  if (normalized === "breakdown") {
+    return "Breakdown";
+  }
+
+  if (normalized === "weather") {
+    return "Weather";
+  }
+
+  if (normalized === "road block" || normalized === "road-block") {
+    return "Road-Block";
+  }
+
+  if (normalized === "not operating" || normalized === "not-operating") {
+    return "Not-Operating";
+  }
+
+  if (normalized === "route-change" || normalized === "route change") {
+    return "Route-Change";
+  }
+
+  if (normalized === "heavy-rain" || normalized === "heavy rain") {
+    return "Heavy-Rain";
+  }
+
+  if (normalized === "damaged-roads" || normalized === "damaged roads") {
+    return "Damaged-Roads";
+  }
+
+  if (normalized === "rule-enforcement" || normalized === "rule enforcement") {
+    return "Rule-Enforcement";
+  }
+
+  if (normalized === "new-bus-stop" || normalized === "new bus stop") {
+    return "New-Bus-Stop";
+  }
+
+  if (normalized === "removed-bus-stop" || normalized === "removed bus stop") {
+    return "Removed-Bus-Stop";
+  }
+
+  if (normalized === "public-events" || normalized === "public events") {
+    return "Public-Events";
+  }
+
+  if (normalized === "service-distruption" || normalized === "service-disruption" || normalized === "service distruption") {
+    return "Service-Distruption";
+  }
+
+  return ALERT_TYPE_VALUE_SET.has(value as AlertTypeValue) ? (value as AlertTypeValue) : "Other";
+};
+
+const normalizeStatus = (value?: string): AlertHistoryStatus => {
+  return value === "scheduled" ? "scheduled" : "published";
+};
+
+const toBackendAlertType = (value: AlertTypeValue): string => ALERT_TYPE_TO_BACKEND[value];
+
+const extractAlertList = (responseData: unknown): BackendAlert[] => {
+  if (Array.isArray(responseData)) {
+    return responseData as BackendAlert[];
+  }
+
+  if (!responseData || typeof responseData !== "object") {
+    return [];
+  }
+
+  const payload = responseData as Record<string, unknown>;
+  const nestedData = payload.data as unknown;
+
+  if (Array.isArray(nestedData)) {
+    return nestedData as BackendAlert[];
+  }
+
+  if (nestedData && typeof nestedData === "object") {
+    const nestedRecord = nestedData as Record<string, unknown>;
+    if (Array.isArray(nestedRecord.alerts)) {
+      return nestedRecord.alerts as BackendAlert[];
+    }
+  }
+
+  if (Array.isArray(payload.alerts)) {
+    return payload.alerts as BackendAlert[];
+  }
+
+  return [];
+};
+
+const mapBackendAlert = (item: BackendAlert): AlertHistoryItem => {
+  const id = item.id ?? item._id ?? item.alertId ?? Date.now();
+  const createdBy = item.createdBy
+    ? {
+        type: item.createdBy.type ?? "admin",
+        id: item.createdBy.id ?? "",
+        name: item.createdBy.name ?? "Unknown",
+      }
+    : undefined;
+
+  return {
+    id,
+    title: item.title ?? "Untitled Alert",
+    description: item.description ?? "",
+    type: normalizeAlertType(item.alertType ?? item.type),
+    status: normalizeStatus(item.status),
+    targetAudience: item.targetAudience ?? (item.targetRoute ? `Route ${item.targetRoute}` : "All Passengers"),
+    affectedRoute: item.affectedRoute ?? item.route ?? "",
+    affectedBus: item.affectedBus ?? item.busNumber ?? "",
+    timestamp: item.timestamp ?? item.createdAt ?? new Date().toISOString(),
+    scheduledAt: item.scheduledAt,
+    sentAt: item.sentAt,
+    createdBy,
+  };
+};
 
 export default function AdminAlertsPage() {
   const [showCreatePage, setShowCreatePage] = useState(false);
   const [alertType, setAlertType] = useState<AlertTypeValue>("Service-Distruption");
   const [affectedRoute, setAffectedRoute] = useState("");
+  const [affectedBus, setAffectedBus] = useState("");
   const [alertTitle, setAlertTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetRoute, setTargetRoute] = useState("");
@@ -55,13 +464,21 @@ export default function AdminAlertsPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
-  const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>(initialAlertHistory);
+  const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>([]);
   const [selectedHistoryAlert, setSelectedHistoryAlert] = useState<AlertHistoryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "admin" | "bus">("all");
   const [filterAlertType, setFilterAlertType] = useState("");
   const [filterAffectedRoute, setFilterAffectedRoute] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | number | null>(null);
+  const [routes, setRoutes] = useState<Array<{ id: number; routeName: string; from?: string; to?: string; routeNumber?: string }>>([]);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalAlerts, setTotalAlerts] = useState(0);
 
   const uniqueRoutes = Array.from(new Set(alertHistory.map((item) => item.affectedRoute).filter(Boolean)));
 
@@ -76,6 +493,9 @@ export default function AdminAlertsPage() {
     return matchesSearch && matchesCreatorFilter && matchesTypeFilter && matchesRouteFilter && matchesStatusFilter;
   });
 
+  const filteredAlertCount = filteredAlerts.length;
+  const safePage = Math.min(page, totalPages);
+
   const canSubmit =
     alertType.trim() !== "" &&
     affectedRoute.trim() !== "" &&
@@ -87,76 +507,158 @@ export default function AdminAlertsPage() {
   const selectedAlertLabel = ALERT_LABEL_MAP[alertType];
   const getTargetAudience = () => (isPublicAlert ? "All Passengers" : targetRoute);
 
-  const addHistoryItem = (status: AlertHistoryStatus, scheduledAt?: string) => {
-    setAlertHistory((currentHistory) => [
-      {
-        id: Date.now(),
+  const formatRouteLabel = (route: { routeName: string; from?: string; to?: string; routeNumber?: string }) => {
+    if (route.routeName.trim() !== "") {
+      return route.routeName;
+    }
+
+    const parts = [route.routeNumber].filter(Boolean);
+    if (route.from || route.to) {
+      parts.push([route.from, route.to].filter(Boolean).join(" - "));
+    }
+
+    return parts.join(" ").trim() || `Route ${route.routeNumber ?? ""}`.trim();
+  };
+
+  const resetCreateForm = () => {
+    setAlertType("Service-Distruption");
+    setAffectedRoute("");
+    setAffectedBus("");
+    setAlertTitle("");
+    setDescription("");
+    setTargetRoute("");
+    setIsPublicAlert(false);
+    setScheduleAt("");
+  };
+
+  const fetchAlertHistory = useCallback(async () => {
+    try {
+      setHistoryLoading(true);
+      const response = await api.get(`/alerts/history/all?page=${page}&limit=${limit}`, getAuthConfig());
+      const payload = response.data?.data ?? response.data;
+      const alerts = extractAlertList(payload?.alerts ?? payload).map(mapBackendAlert);
+      setAlertHistory(alerts);
+      setTotalPages(payload?.totalPages ?? 1);
+      setTotalAlerts(payload?.total ?? alerts.length);
+    } catch {
+      toast.error("Failed to load alert history");
+      setAlertHistory([]);
+      setTotalPages(1);
+      setTotalAlerts(0);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [page, limit]);
+
+  const submitAlert = async (status: AlertHistoryStatus, scheduledAtIso?: string) => {
+    try {
+      setSubmitting(true);
+      const targetRouteId = isPublicAlert ? null : Number(targetRoute);
+      const payload: Record<string, unknown> = {
         title: alertTitle,
         description,
-        type: alertType,
-        status,
-        targetAudience: getTargetAudience(),
-        affectedRoute,
-        affectedBus: "",
-        timestamp: new Date().toISOString(),
-        scheduledAt,
-        sentAt: status === "published" ? new Date().toISOString() : undefined,
-        createdBy: { type: "admin", id: "admin-1", name: "Admin User" },
-      },
-      ...currentHistory,
-    ]);
+        alertType: toBackendAlertType(alertType),
+        targetAudience: isPublicAlert ? "public" : "route",
+        targetRoute: Number.isFinite(targetRouteId) ? targetRouteId : null,
+        affectedRoute: affectedRoute.trim() || null,
+        affectedBus: affectedBus.trim() || null,
+      };
+
+      if (status === "scheduled" && scheduledAtIso) {
+        payload.status = "scheduled";
+        payload.scheduledAt = scheduledAtIso;
+      } else {
+        payload.status = "sent";
+      }
+
+      await api.post("/alerts", payload, getAuthConfig());
+      toast.success(status === "published" ? "Alert published successfully" : "Alert scheduled");
+      await fetchAlertHistory();
+      resetCreateForm();
+      setShowSchedule(false);
+      setShowCreatePage(false);
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const responseData = error.response?.data as
+          | { message?: string; errors?: Array<{ msg?: string; message?: string }> }
+          | undefined;
+
+        const fieldError = responseData?.errors?.[0]?.msg ?? responseData?.errors?.[0]?.message;
+        const message = responseData?.message ?? fieldError;
+
+        toast.error(message ? `Failed to save alert: ${message}` : "Failed to save alert");
+      } else {
+        toast.error("Failed to save alert");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleCreateAlert = () => {
-    addHistoryItem("published");
-    toast.success("Alert published successfully");
-    setShowCreatePage(false);
+  const handleCreateAlert = async () => {
+    await submitAlert("published");
   };
 
-  const handleConfirmSchedule = () => {
+  const handleConfirmSchedule = async () => {
     const date = new Date(scheduleAt);
     if (Number.isNaN(date.getTime())) {
       toast.error("Invalid date/time");
       return;
     }
 
-    addHistoryItem("scheduled", date.toISOString());
-    toast.success("Alert scheduled");
-    setShowSchedule(false);
-    setShowCreatePage(false);
+    await submitAlert("scheduled", date.toISOString());
+  };
+
+  const handleViewAlert = async (item: AlertHistoryItem) => {
+    const id = item.id;
+    setDetailLoadingId(id);
+
+    try {
+      const response = await api.get(`/alerts/${id}`, getAuthConfig());
+      const detailsPayload = response.data as Record<string, unknown>;
+      const data = detailsPayload?.data as unknown;
+
+      if (data && !Array.isArray(data) && typeof data === "object") {
+        setSelectedHistoryAlert(mapBackendAlert(data as BackendAlert));
+      } else {
+        setSelectedHistoryAlert(item);
+      }
+    } catch {
+      toast.error("Failed to load alert details");
+      setSelectedHistoryAlert(item);
+    } finally {
+      setDetailLoadingId(null);
+    }
   };
 
   useEffect(() => {
-    const promoteScheduledAlerts = () => {
-      const now = Date.now();
-      setAlertHistory((currentHistory) => {
-        let changed = false;
-        const nextHistory = currentHistory.map((item) => {
-          if (item.status !== "scheduled" || !item.scheduledAt) {
-            return item;
-          }
-
-          const scheduledAtMs = Date.parse(item.scheduledAt);
-          if (Number.isNaN(scheduledAtMs) || scheduledAtMs > now) {
-            return item;
-          }
-
-          changed = true;
-          return {
-            ...item,
-            status: "published" as AlertHistoryStatus,
-            timestamp: new Date().toISOString(),
-          };
+    const loadRoutes = async () => {
+      try {
+        const response = await api.get("/routes", {
+          ...getAuthConfig(),
+          params: { limit: 200 },
         });
-
-        return changed ? nextHistory : currentHistory;
-      });
+        const data = response.data?.data?.routes ?? response.data?.routes ?? response.data?.data ?? [];
+        const normalizedRoutes = Array.isArray(data)
+          ? data
+              .map((route: BackendRoute) => ({
+                id: Number(route.id ?? 0),
+                routeName: route.routeName ?? "",
+                from: route.from,
+                to: route.to,
+                routeNumber: route.routeNumber,
+              }))
+              .filter((route) => route.id > 0)
+          : [];
+        setRoutes(normalizedRoutes);
+      } catch {
+        toast.error("Failed to load routes");
+      }
     };
 
-    promoteScheduledAlerts();
-    const timerId = window.setInterval(promoteScheduledAlerts, 30000);
-    return () => window.clearInterval(timerId);
-  }, []);
+    fetchAlertHistory();
+    loadRoutes();
+  }, [fetchAlertHistory]);
 
   return (
     <>
@@ -238,8 +740,10 @@ export default function AdminAlertsPage() {
                 <div>Status</div>
                 <div className="text-center">Action</div>
               </div>
-              {filteredAlerts.length > 0 ? (
-                filteredAlerts.map((item, index) => (
+              {historyLoading ? (
+                <div className="px-4 py-8 text-center text-gray-500">Loading alerts...</div>
+              ) : filteredAlerts.length > 0 ? (
+                filteredAlerts.map((item) => (
                   <div key={item.id} className="grid grid-cols-[90px_1.1fr_1fr_1fr_1.4fr_1.1fr_1fr_110px_70px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition">
                     <div className="font-semibold text-[#122843] whitespace-nowrap">{item.id}</div>
                     <div className="font-medium text-gray-700">{ALERT_LABEL_MAP[item.type]}</div>
@@ -254,7 +758,7 @@ export default function AdminAlertsPage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-center">
-                      <button onClick={() => setSelectedHistoryAlert(item)} className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 shadow-sm transition">
+                      <button disabled={detailLoadingId === item.id} onClick={() => handleViewAlert(item)} className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed" title={detailLoadingId === item.id ? "Loading details..." : "View details"}>
                         <FaEye className="text-blue-600" />
                       </button>
                     </div>
@@ -264,6 +768,60 @@ export default function AdminAlertsPage() {
                 <div className="px-4 py-8 text-center text-gray-500">No alerts found</div>
               )}
             </div>
+
+            {!historyLoading && totalAlerts > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                <p className="text-sm text-gray-600">
+                  Showing {(safePage - 1) * limit + 1} to {Math.min(safePage * limit, totalAlerts)} of {totalAlerts} alerts
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    disabled={safePage <= 1}
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                      <button
+                        key={pageNumber}
+                        type="button"
+                        onClick={() => setPage(pageNumber)}
+                        className={`min-w-9 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                          pageNumber === safePage
+                            ? "bg-[#4CAF8A] text-white"
+                            : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                    disabled={safePage >= totalPages}
+                  >
+                    Next
+                  </button>
+                  <select
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="h-9 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -286,8 +844,11 @@ export default function AdminAlertsPage() {
               ))}
             </select>
 
-            <label className="block mb-5 mt-5 font-semibold">Affected Route/Bus:</label>
-            <input type="text" className="w-80 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter affected route or bus number" value={affectedRoute} onChange={(e) => setAffectedRoute(e.target.value)} />
+            <label className="block mb-5 mt-5 font-semibold">Affected Route:</label>
+            <input type="text" className="w-80 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter affected route number" value={affectedRoute} onChange={(e) => setAffectedRoute(e.target.value)} />
+
+            <label className="block mb-5 mt-5 font-semibold">Affected Bus:</label>
+            <input type="text" className="w-80 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter affected bus number" value={affectedBus} onChange={(e) => setAffectedBus(e.target.value)} />
 
             <label className="block mb-5 mt-5 font-semibold">Alert Title:</label>
             <input type="text" className="w-150 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter a concise title for the alert" value={alertTitle} onChange={(e) => setAlertTitle(e.target.value)} />
@@ -298,14 +859,23 @@ export default function AdminAlertsPage() {
             <label className="block mb-5 mt-5 font-semibold">Target Audience:</label>
             <div className="flex items-end gap-1">
               <div className="flex-1">
-                <select className="h-10 w-50 border rounded-md border-[#828282]/70 px-2" value={targetRoute} onChange={(e) => { setTargetRoute(e.target.value); if (e.target.value) setIsPublicAlert(false); }} disabled={isPublicAlert}>
+                <select
+                  className="h-10 w-50 border rounded-md border-[#828282]/70 px-2"
+                  value={targetRoute}
+                  onChange={(e) => {
+                    setTargetRoute(e.target.value);
+                    if (e.target.value) setIsPublicAlert(false);
+                  }}
+                  disabled={isPublicAlert}
+                >
                   <option value="" disabled>
                     Select a route
                   </option>
-                  <option value="100">100 Panadura - Pettah</option>
-                  <option value="101">101 Moratuwa - Pettah</option>
-                  <option value="102">102 Moratuwa - Kotahena</option>
-                  <option value="103">103 Narahenpita - Fort</option>
+                  {routes.map((route) => (
+                    <option key={route.id} value={String(route.id)}>
+                      {formatRouteLabel(route)}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -324,14 +894,14 @@ export default function AdminAlertsPage() {
                 <button className="bg-yellow-500 px-4 py-2 rounded-md text-white hover:bg-yellow-600" onClick={() => setShowPreview(true)}>
                   Preview
                 </button>
-                <button disabled={!canSubmit} onClick={() => setShowSchedule(true)} className="bg-green-500 px-4 py-2 rounded-md text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-blue-400">
+                <button disabled={!canSubmit || submitting} onClick={() => setShowSchedule(true)} className="bg-green-500 px-4 py-2 rounded-md text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-blue-400">
                   Schedule
                 </button>
               </div>
 
               <div className="flex flex-wrap justify-end gap-3">
-                <button disabled={!canSubmit} className="bg-[#4CAF8A] text-white font-semibold px-6 h-10 rounded-lg hover:bg-[#3d9e7a] transition shadow-md disabled:cursor-not-allowed disabled:bg-gray-400" onClick={handleCreateAlert}>
-                  Create Alert
+                <button disabled={!canSubmit || submitting} className="bg-[#4CAF8A] text-white font-semibold px-6 h-10 rounded-lg hover:bg-[#3d9e7a] transition shadow-md disabled:cursor-not-allowed disabled:bg-gray-400" onClick={handleCreateAlert}>
+                  {submitting ? "Saving..." : "Create Alert"}
                 </button>
               </div>
             </div>
@@ -341,7 +911,7 @@ export default function AdminAlertsPage() {
 
       <AlertHistoryViewModal item={selectedHistoryAlert} onClose={() => setSelectedHistoryAlert(null)} />
 
-      <AlertPreviewModal open={showPreview} onClose={() => setShowPreview(false)} previewCardClass={previewStyle.cardClass} selectedAlertLabel={selectedAlertLabel} affectedRoute={affectedRoute} alertTitle={alertTitle} description={description} isPublicAlert={isPublicAlert} targetRoute={targetRoute} />
+      <AlertPreviewModal open={showPreview} onClose={() => setShowPreview(false)} previewCardClass={previewStyle.cardClass} selectedAlertLabel={selectedAlertLabel} affectedRoute={affectedRoute} affectedBus={affectedBus} alertTitle={alertTitle} description={description} isPublicAlert={isPublicAlert} targetRoute={targetRoute} />
 
       <AlertScheduleModal open={showSchedule} scheduleAt={scheduleAt} onScheduleAtChange={setScheduleAt} onCancel={() => setShowSchedule(false)} onConfirm={handleConfirmSchedule} />
     </>
