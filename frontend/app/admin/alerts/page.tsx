@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import axios from "axios";
+import { z } from "zod";
 import {
   ALERT_LABEL_MAP,
   ALERT_STYLE_MAP,
@@ -73,6 +74,38 @@ type AlertHistoryItem = {
   sentAt?: string;
   createdBy?: CreatedBy;
 };
+
+const buildCreateAlertFormSchema = (routeIds: Set<string>) =>
+  z
+    .object({
+      alertType: z
+        .string()
+        .trim()
+        .refine((value) => ALERT_TYPE_VALUE_SET.has(value), "Alert type is required"),
+      affectedRoute: z.string().trim().min(1, "Affected route is required"),
+      affectedBus: z.string().trim(),
+      alertTitle: z.string().trim().min(1, "Alert title is required"),
+      description: z.string().trim().min(1, "Description is required"),
+      isPublicAlert: z.boolean(),
+      targetRoute: z.string().trim(),
+    })
+    .superRefine((value, ctx) => {
+      if (!value.isPublicAlert && value.targetRoute === "") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["targetRoute"],
+          message: "Select a target route or choose Public Alert",
+        });
+      }
+
+      if (!value.isPublicAlert && value.targetRoute !== "" && !routeIds.has(value.targetRoute)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["targetRoute"],
+          message: "Target route must be selected from the route list",
+        });
+      }
+    });
 
 type AlertHistoryViewModalProps = {
   item: AlertHistoryItem | null;
@@ -479,6 +512,7 @@ export default function AdminAlertsPage() {
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalAlerts, setTotalAlerts] = useState(0);
+  const [createFormErrors, setCreateFormErrors] = useState<Record<string, string>>({});
 
   const uniqueRoutes = Array.from(new Set(alertHistory.map((item) => item.affectedRoute).filter(Boolean)));
 
@@ -495,13 +529,20 @@ export default function AdminAlertsPage() {
 
   const filteredAlertCount = filteredAlerts.length;
   const safePage = Math.min(page, totalPages);
+  const availableRouteIds = new Set(routes.map((route) => String(route.id)));
+  const createAlertFormSchema = buildCreateAlertFormSchema(availableRouteIds);
 
-  const canSubmit =
-    alertType.trim() !== "" &&
-    affectedRoute.trim() !== "" &&
-    alertTitle.trim() !== "" &&
-    description.trim() !== "" &&
-    (isPublicAlert || targetRoute.trim() !== "");
+  const createAlertValidation = createAlertFormSchema.safeParse({
+    alertType,
+    affectedRoute,
+    affectedBus,
+    alertTitle,
+    description,
+    isPublicAlert,
+    targetRoute,
+  });
+
+  const canSubmit = createAlertValidation.success;
 
   const previewStyle = ALERT_STYLE_MAP[alertType];
   const selectedAlertLabel = ALERT_LABEL_MAP[alertType];
@@ -529,6 +570,7 @@ export default function AdminAlertsPage() {
     setTargetRoute("");
     setIsPublicAlert(false);
     setScheduleAt("");
+    setCreateFormErrors({});
   };
 
   const fetchAlertHistory = useCallback(async () => {
@@ -550,18 +592,52 @@ export default function AdminAlertsPage() {
     }
   }, [page, limit]);
 
+  const validateCreateAlertForm = () => {
+    const parsed = createAlertFormSchema.safeParse({
+      alertType,
+      affectedRoute,
+      affectedBus,
+      alertTitle,
+      description,
+      isPublicAlert,
+      targetRoute,
+    });
+
+    if (!parsed.success) {
+      const nextErrors: Record<string, string> = {};
+      parsed.error.issues.forEach((issue) => {
+        const field = String(issue.path[0] ?? "form");
+        if (!nextErrors[field]) {
+          nextErrors[field] = issue.message;
+        }
+      });
+
+      setCreateFormErrors(nextErrors);
+      toast.error(parsed.error.issues[0]?.message ?? "Please fill all required fields");
+      return null;
+    }
+
+    setCreateFormErrors({});
+    return parsed.data;
+  };
+
   const submitAlert = async (status: AlertHistoryStatus, scheduledAtIso?: string) => {
+    const formData = validateCreateAlertForm();
+    if (!formData) {
+      return;
+    }
+
     try {
       setSubmitting(true);
-      const targetRouteId = isPublicAlert ? null : Number(targetRoute);
+      const targetRouteId = formData.isPublicAlert ? null : Number(formData.targetRoute);
       const payload: Record<string, unknown> = {
-        title: alertTitle,
-        description,
-        alertType: toBackendAlertType(alertType),
-        targetAudience: isPublicAlert ? "public" : "route",
+        title: formData.alertTitle,
+        description: formData.description,
+        alertType: toBackendAlertType(formData.alertType as AlertTypeValue),
+        targetAudience: formData.isPublicAlert ? "public" : "route",
         targetRoute: Number.isFinite(targetRouteId) ? targetRouteId : null,
-        affectedRoute: affectedRoute.trim() || null,
-        affectedBus: affectedBus.trim() || null,
+        affectedRoute: formData.affectedRoute,
+        affectedBus: formData.affectedBus,
       };
 
       if (status === "scheduled" && scheduledAtIso) {
@@ -597,6 +673,15 @@ export default function AdminAlertsPage() {
 
   const handleCreateAlert = async () => {
     await submitAlert("published");
+  };
+
+  const handleOpenSchedule = () => {
+    const formData = validateCreateAlertForm();
+    if (!formData) {
+      return;
+    }
+
+    setShowSchedule(true);
   };
 
   const handleConfirmSchedule = async () => {
@@ -835,7 +920,8 @@ export default function AdminAlertsPage() {
               </button>
             </div>
 
-            <label className="block mb-5 font-semibold">Alert Type:</label>
+            <label className="block mb-2 font-semibold">Alert Type *</label>
+            <p className="mb-3 text-xs text-gray-500">Fields marked with * are mandatory.</p>
             <select className="h-10 border rounded-md border-[#828282]/70 px-2" value={alertType} onChange={(e) => setAlertType(e.target.value as AlertTypeValue)}>
               {ALERT_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -844,23 +930,43 @@ export default function AdminAlertsPage() {
               ))}
             </select>
 
-            <label className="block mb-5 mt-5 font-semibold">Affected Route:</label>
-            <input type="text" className="w-80 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter affected route number" value={affectedRoute} onChange={(e) => setAffectedRoute(e.target.value)} />
+            <label className="block mb-5 mt-5 font-semibold">Affected Route *</label>
+            <input
+              type="text"
+              className={`w-80 h-10 border rounded-md px-2 ${createFormErrors.affectedRoute ? "border-red-500" : "border-[#828282]/70"}`}
+              placeholder="Enter affected route number"
+              value={affectedRoute}
+              onChange={(e) => setAffectedRoute(e.target.value)}
+            />
+            {createFormErrors.affectedRoute && <p className="mt-1 text-xs text-red-600">{createFormErrors.affectedRoute}</p>}
 
-            <label className="block mb-5 mt-5 font-semibold">Affected Bus:</label>
-            <input type="text" className="w-80 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter affected bus number" value={affectedBus} onChange={(e) => setAffectedBus(e.target.value)} />
+            <label className="block mb-5 mt-5 font-semibold">Affected Bus (Optional)</label>
+            <input type="text" className="w-80 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter affected bus number (optional)" value={affectedBus} onChange={(e) => setAffectedBus(e.target.value)} />
 
-            <label className="block mb-5 mt-5 font-semibold">Alert Title:</label>
-            <input type="text" className="w-150 h-10 border rounded-md border-[#828282]/70 px-2" placeholder="Enter a concise title for the alert" value={alertTitle} onChange={(e) => setAlertTitle(e.target.value)} />
+            <label className="block mb-5 mt-5 font-semibold">Alert Title *</label>
+            <input
+              type="text"
+              className={`w-150 h-10 border rounded-md px-2 ${createFormErrors.alertTitle ? "border-red-500" : "border-[#828282]/70"}`}
+              placeholder="Enter a concise title for the alert"
+              value={alertTitle}
+              onChange={(e) => setAlertTitle(e.target.value)}
+            />
+            {createFormErrors.alertTitle && <p className="mt-1 text-xs text-red-600">{createFormErrors.alertTitle}</p>}
 
-            <label className="block mb-5 mt-5 font-semibold">Description:</label>
-            <textarea className="w-full h-24 border rounded-md border-[#828282]/70 px-2 py-1" placeholder="Enter detailed description of the alert" value={description} onChange={(e) => setDescription(e.target.value)}></textarea>
+            <label className="block mb-5 mt-5 font-semibold">Description *</label>
+            <textarea
+              className={`w-full h-24 border rounded-md px-2 py-1 ${createFormErrors.description ? "border-red-500" : "border-[#828282]/70"}`}
+              placeholder="Enter detailed description of the alert"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            ></textarea>
+            {createFormErrors.description && <p className="mt-1 text-xs text-red-600">{createFormErrors.description}</p>}
 
-            <label className="block mb-5 mt-5 font-semibold">Target Audience:</label>
+            <label className="block mb-5 mt-5 font-semibold">Target Audience *</label>
             <div className="flex items-end gap-1">
               <div className="flex-1">
                 <select
-                  className="h-10 w-50 border rounded-md border-[#828282]/70 px-2"
+                  className={`h-10 w-50 border rounded-md px-2 ${createFormErrors.targetRoute ? "border-red-500" : "border-[#828282]/70"}`}
                   value={targetRoute}
                   onChange={(e) => {
                     setTargetRoute(e.target.value);
@@ -884,6 +990,7 @@ export default function AdminAlertsPage() {
                 <label htmlFor="public-alert" className="font-semibold text-slate-700 whitespace-nowrap">Public Alert</label>
               </div>
             </div>
+            {createFormErrors.targetRoute && <p className="mt-1 text-xs text-red-600">{createFormErrors.targetRoute}</p>}
 
             <div>
               <p className="mt-3 text-sm font-medium text-gray-600">* If "Public Alert" is checked, the alert will be sent to all passengers. Otherwise, it will only be sent to passengers of the selected route.</p>
@@ -894,13 +1001,21 @@ export default function AdminAlertsPage() {
                 <button className="bg-yellow-500 px-4 py-2 rounded-md text-white hover:bg-yellow-600" onClick={() => setShowPreview(true)}>
                   Preview
                 </button>
-                <button disabled={!canSubmit || submitting} onClick={() => setShowSchedule(true)} className="bg-green-500 px-4 py-2 rounded-md text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-blue-400">
+                <button
+                  disabled={submitting}
+                  onClick={handleOpenSchedule}
+                  className={`px-4 py-2 rounded-md text-white ${canSubmit ? "bg-green-500 hover:bg-green-600" : "bg-green-500/80 hover:bg-green-500"} disabled:cursor-not-allowed disabled:bg-blue-400`}
+                >
                   Schedule
                 </button>
               </div>
 
               <div className="flex flex-wrap justify-end gap-3">
-                <button disabled={!canSubmit || submitting} className="bg-[#4CAF8A] text-white font-semibold px-6 h-10 rounded-lg hover:bg-[#3d9e7a] transition shadow-md disabled:cursor-not-allowed disabled:bg-gray-400" onClick={handleCreateAlert}>
+                <button
+                  disabled={submitting}
+                  className={`text-white font-semibold px-6 h-10 rounded-lg transition shadow-md ${canSubmit ? "bg-[#4CAF8A] hover:bg-[#3d9e7a]" : "bg-[#4CAF8A]/80 hover:bg-[#4CAF8A]"} disabled:cursor-not-allowed disabled:bg-gray-400`}
+                  onClick={handleCreateAlert}
+                >
                   {submitting ? "Saving..." : "Create Alert"}
                 </button>
               </div>
