@@ -2,6 +2,7 @@
 
 import { type ReactNode } from "react";
 import { FaCircle } from "react-icons/fa";
+import { usePathname } from "next/navigation";
 
 type BusInfo = {
   busId: string;
@@ -18,11 +19,20 @@ type TopBarProps = {
 };
 
 const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
+  const pathname = usePathname();
+  const isPassengerLiveTracking = pathname === "/passenger/liveTracking";
+  const isBusRoute = pathname.startsWith("/bus");
+  const isAdminRoute = pathname.startsWith("/admin");
+  const topbarThemeClass = isBusRoute
+    ? "bus-topbar"
+    : isAdminRoute
+    ? "admin-topbar"
+    : "passenger-topbar";
   const defaultDriver = busInfo?.defaultDriver ?? busInfo?.drivers[0] ?? "";
   const driverSelectKey = `${busInfo?.busId ?? "no-bus"}-${defaultDriver}`;
 
   return (
-    <div className="w-full h-16 bg-white shadow flex items-center justify-between px-6 sticky top-0 z-10">
+    <div className={`${topbarThemeClass} w-full h-16 bg-white shadow flex items-center justify-between px-6 sticky top-0 z-10`}>
       <div className="flex items-center gap-4">
         {icon}
         <h1 className="text-2xl font-bold">{title}</h1>
@@ -60,13 +70,37 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
             </select>
           </div>
 
-          <div className="rounded-full border border-[#94A0AE] bg-[#EEEEEE] px-3 py-2 text-sm text-slate-700 flex items-center gap-1">
+          <div className="bus-topbar-meta rounded-full border border-[#94A0AE] bg-[#EEEEEE] px-3 py-2 text-sm text-slate-700 flex items-center gap-1">
             <img src="/icons/bus.png" alt="bus" className=" w-5 h-5 mr-1" />
             <div>
                 <p className="font-bold">Bus ID: {busInfo.busId}</p>
                 <p>Route: {busInfo.routeNumber}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {!busInfo && isPassengerLiveTracking && (
+        <div className="flex gap-3 items-center">
+          <div className="flex items-center gap-2 mr-1">
+            <FaCircle className="text-green-500 animate-pulse text-xs" />
+            <span className="text-green-600 font-semibold">Live</span>
+          </div>
+
+          <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white text-slate-700">
+            <option>All Routes</option>
+            <option>115</option>
+            <option>120</option>
+            <option>122</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="bg-[#4caf8a] text-white px-4 py-2 rounded-lg hover:bg-[#3f9c79] text-sm font-semibold"
+          >
+            Refresh
+          </button>
         </div>
       )}
     </div>

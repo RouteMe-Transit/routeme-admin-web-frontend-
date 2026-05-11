@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import dynamic from "next/dynamic";
 
 type Bus = {
   id: string;
@@ -9,7 +10,18 @@ type Bus = {
   to: string;
   heading: string;
   type: string;
+  latitude: number;
+  longitude: number;
 };
+
+const LiveTrackingMap = dynamic(() => import("@/app/passenger/liveTracking/LiveTrackingMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-125 bg-gray-200 rounded-xl flex items-center justify-center text-gray-500">
+      Loading map...
+    </div>
+  ),
+});
 
 const buses: Bus[] = [
   {
@@ -19,6 +31,8 @@ const buses: Bus[] = [
     to: "Pettah",
     heading: "Pettah",
     type: "Standard",
+    latitude: 6.8781,
+    longitude: 79.8829,
   },
   {
     id: "NA-4421",
@@ -27,6 +41,8 @@ const buses: Bus[] = [
     to: "Pettah",
     heading: "Horana",
     type: "Standard",
+    latitude: 6.9185,
+    longitude: 79.8659,
   },
   {
     id: "NA-2203",
@@ -35,6 +51,8 @@ const buses: Bus[] = [
     to: "Pettah",
     heading: "Pettah",
     type: "Semi-Luxury",
+    latitude: 6.9423,
+    longitude: 79.8585,
   },
   {
     id: "NA-3158",
@@ -43,6 +61,8 @@ const buses: Bus[] = [
     to: "Pettah",
     heading: "Pettah",
     type: "Standard",
+    latitude: 6.9001,
+    longitude: 79.9327,
   },
   {
     id: "NA-5067",
@@ -51,6 +71,8 @@ const buses: Bus[] = [
     to: "Kollupitiya",
     heading: "Kollupitiya",
     type: "Standard",
+    latitude: 6.9413,
+    longitude: 79.8809,
   },
   {
     id: "NA-6634",
@@ -59,47 +81,26 @@ const buses: Bus[] = [
     to: "Pettah",
     heading: "Maharagama",
     type: "Standard",
+    latitude: 6.8649,
+    longitude: 79.8997,
   },
 ];
 
 export default function LiveTrackingPage() {
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Live Bus Tracking</h1>
-          <p className="text-sm text-green-600">● Live</p>
-        </div>
-
-        <div className="flex gap-3">
-          <select className="border rounded-lg px-4 py-2">
-            <option>All Routes</option>
-            <option>115</option>
-            <option>120</option>
-            <option>122</option>
-          </select>
-
-          <button className="bg-[#4caf8a] text-white px-4 py-2 rounded-lg hover:bg-[#3f9c79]">
-            Refresh
-          </button>
-        </div>
-      </div>
-
       {/* Main Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Map Section */}
         <div className="lg:col-span-3 bg-white rounded-2xl shadow p-4">
-          <div className="w-full h-[500px] bg-gray-200 rounded-xl flex items-center justify-center text-gray-500">
-            Map Placeholder
-          </div>
+          <LiveTrackingMap buses={buses} />
         </div>
 
         {/* Sidebar Bus List */}
         <div className="bg-white rounded-2xl shadow p-4">
           <h2 className="text-lg font-semibold mb-4">Buses Near You</h2>
 
-          <div className="space-y-3 max-h-[500px] overflow-y-auto">
+          <div className="space-y-3 max-h-125 overflow-y-auto">
             {buses.map((bus) => (
               <div
                 key={bus.id}

@@ -1,5 +1,7 @@
 
 
+"use client";
+
 type Props = {
   label: string;
   icon?: React.ReactNode;
@@ -26,15 +28,15 @@ export default function SidebarItem({
         }
       `}
     >
-      <div className="text-2xl">{icon}</div>
-      <div className="flex items-center gap-1.5">
-        <span className="font-semibold text-xl">{label}</span>
+      <div className="text-2xl relative inline-block">
+        {icon}
         {typeof badgeCount === "number" && badgeCount > 0 && (
-          <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
-            {badgeCount}
+          <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white animate-pulse">
+            {badgeCount > 99 ? "99+" : badgeCount}
           </span>
         )}
       </div>
+      <span className="font-semibold text-xl">{label}</span>
     </button>
   );
 }
