@@ -3,6 +3,7 @@
 import { ALERT_LABEL_MAP, ALERT_STYLE_MAP, AlertTypeValue } from "@/config/alertTypes";
 
 export const PASSENGER_ALERTS_CHANGED_EVENT = "passenger-alerts-changed";
+export const PASSENGER_ALERTS_SEEN_IDS_STORAGE_KEY = "passenger-alert-feed-seen-ids";
 
 export type PassengerAlert = {
 	id: number;
@@ -13,6 +14,43 @@ export type PassengerAlert = {
 	time: string;
 	isUnread: boolean;
 };
+
+function dispatchPassengerAlertsChanged() {
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(new Event(PASSENGER_ALERTS_CHANGED_EVENT));
+	}
+}
+
+export function getSeenPassengerAlertIds() {
+	if (typeof window === "undefined") {
+		return new Set<string>();
+	}
+
+	try {
+		const rawValue = window.sessionStorage.getItem(PASSENGER_ALERTS_SEEN_IDS_STORAGE_KEY);
+		const parsed = rawValue ? (JSON.parse(rawValue) as unknown) : [];
+
+		if (!Array.isArray(parsed)) {
+			return new Set<string>();
+		}
+
+		return new Set(parsed.filter((id): id is string => typeof id === "string"));
+	} catch {
+		return new Set<string>();
+	}
+}
+
+export function markPassengerAlertsAsSeen(alertIds: string[]) {
+	if (typeof window !== "undefined") {
+		try {
+			window.sessionStorage.setItem(PASSENGER_ALERTS_SEEN_IDS_STORAGE_KEY, JSON.stringify(alertIds));
+		} catch {
+			// Ignore storage failures and fall back to in-memory updates.
+		}
+	}
+
+	dispatchPassengerAlertsChanged();
+}
 
 export const BUS_ALERT_TYPES = [
 	"Delay",
@@ -113,7 +151,7 @@ export function markAllPassengerAlertsAsRead() {
 	}
 
 	if (changed) {
-		window.dispatchEvent(new Event(PASSENGER_ALERTS_CHANGED_EVENT));
+		dispatchPassengerAlertsChanged();
 	}
 }
 

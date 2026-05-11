@@ -1,14 +1,15 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import api from "@/app/services/api";
 import SidebarItem from "./SidebarItem";
 import LogoNname from "../logoNname/logoNname";
 import { FaPowerOff } from "react-icons/fa6";
 import {
   PASSENGER_ALERTS_CHANGED_EVENT,
-  getPassengerUnreadAlertCount,
+  getSeenPassengerAlertIds,
 } from "@/config/passengerAlerts";
 
 type MenuItem = {
@@ -17,6 +18,73 @@ type MenuItem = {
   icon: React.ReactNode;
   path?: string;
 };
+
+type BackendAlert = {
+  id?: string | number;
+  _id?: string;
+  alertId?: string | number;
+  title?: string;
+  description?: string;
+  type?: string;
+  alertType?: string;
+  createdAt?: string;
+  sentAt?: string;
+  timestamp?: string;
+  readAt?: string;
+  isUnread?: boolean;
+  isRead?: boolean;
+};
+
+const ALERT_FEED_LIMIT = 50;
+
+function getAuthConfig() {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  return {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  };
+}
+
+function extractAlertList(payload: unknown): BackendAlert[] {
+  if (Array.isArray(payload)) {
+    return payload as BackendAlert[];
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  if (Array.isArray(record.alerts)) {
+    return record.alerts as BackendAlert[];
+  }
+
+  if (record.data && typeof record.data === "object") {
+    const nested = record.data as Record<string, unknown>;
+
+    if (Array.isArray(nested.alerts)) {
+      return nested.alerts as BackendAlert[];
+    }
+
+    if (Array.isArray(nested.data)) {
+      return nested.data as BackendAlert[];
+    }
+  }
+
+  return [];
+}
+
+function getAlertId(alert: BackendAlert) {
+  return String(alert.id ?? alert._id ?? alert.alertId ?? alert.title ?? alert.timestamp ?? alert.createdAt ?? Date.now());
+}
+
+function isAlertUnread(alert: BackendAlert, seenIds: Set<string>) {
+  const id = getAlertId(alert);
+  const backendUnread = alert.isUnread ?? (typeof alert.isRead === "boolean" ? !alert.isRead : !alert.readAt);
+
+  return Boolean(backendUnread && !seenIds.has(id));
+}
 
 
 const menus = {
@@ -68,32 +136,61 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [localGpsEnabled, setLocalGpsEnabled] = useState(false);
-  const [unreadPassengerAlerts, setUnreadPassengerAlerts] = useState(() =>
-    role === "passenger" ? getPassengerUnreadAlertCount() : 0,
-  );
+  const [unreadPassengerAlerts, setUnreadPassengerAlerts] = useState(0);
   const isGpsEnabled = gpsEnabled ?? localGpsEnabled;
 
-  useEffect(() => {
+  const loadUnreadPassengerAlerts = useCallback(async () => {
     if (role !== "passenger") {
+      setUnreadPassengerAlerts(0);
       return;
     }
 
+    try {
+      const response = await api.get("/alerts/feed", {
+        ...getAuthConfig(),
+        params: {
+          page: 1,
+          limit: ALERT_FEED_LIMIT,
+        },
+      });
+
+      const payload = response.data?.data ?? response.data;
+      const seenAlertIds = getSeenPassengerAlertIds();
+      const alerts = extractAlertList(payload);
+
+      const unreadCount = alerts.filter((alert) => isAlertUnread(alert, seenAlertIds)).length;
+      setUnreadPassengerAlerts(unreadCount);
+    } catch {
+      setUnreadPassengerAlerts(0);
+    }
+  }, [role]);
+
+  useEffect(() => {
+    if (role !== "passenger") {
+      setUnreadPassengerAlerts(0);
+      return;
+    }
+
+    void loadUnreadPassengerAlerts();
+
     const updateUnreadCount = () => {
-      setUnreadPassengerAlerts(getPassengerUnreadAlertCount());
+      void loadUnreadPassengerAlerts();
     };
 
-    updateUnreadCount();
     window.addEventListener(PASSENGER_ALERTS_CHANGED_EVENT, updateUnreadCount);
 
     return () => {
       window.removeEventListener(PASSENGER_ALERTS_CHANGED_EVENT, updateUnreadCount);
     };
-  }, [role]);
+  }, [loadUnreadPassengerAlerts, role, pathname]);
 
   const items = menus[role] as MenuItem[];
 
   return (
-    <div className={`w-[385px] h-screen bg-[#122843] text-white flex flex-col sticky top-0 z-20 ${role === "passenger" ? "passenger-sidebar" : ""} ${role === "bus" ? "bus-sidebar" : ""} ${role === "admin" ? "admin-sidebar" : ""}`}>
+    <div
+      className={`h-screen bg-[#122843] text-white flex flex-col sticky top-0 z-20 ${role === "passenger" ? "passenger-sidebar" : ""} ${role === "bus" ? "bus-sidebar" : ""} ${role === "admin" ? "admin-sidebar" : ""}`}
+      style={{ width: "385px" }}
+    >
       <LogoNname/>
 
       <div className="border-t border-gray-700" />
@@ -109,7 +206,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
                 label={item.label}
                 icon={item.icon}
                 active={item.path ? pathname === item.path : false}
-                badgeCount={isPassengerAlerts ? unreadPassengerAlerts : undefined}
+                badgeCount={isPassengerAlerts && unreadPassengerAlerts > 0 ? unreadPassengerAlerts : undefined}
                 onClick={() => {
                   if (item.path) router.push(item.path);
                 }}
