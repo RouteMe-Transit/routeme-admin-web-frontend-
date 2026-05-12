@@ -158,7 +158,54 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
       const seenAlertIds = getSeenPassengerAlertIds();
       const alerts = extractAlertList(payload);
 
-      const unreadCount = alerts.filter((alert) => isAlertUnread(alert, seenAlertIds)).length;
+      // Determine user registration time (if available) from stored user object.
+      function getUserRegisteredAt(): Date | null {
+        try {
+          const raw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+          if (!raw) return null;
+          const user = JSON.parse(raw) as Record<string, unknown>;
+
+          const candidates = [
+            "createdAt",
+            "created_at",
+            "registeredAt",
+            "registered_at",
+            "joinedAt",
+            "joined_at",
+            "created",
+            "registeredOn",
+          ];
+
+          for (const k of candidates) {
+            const v = user[k];
+            if (typeof v === "string") {
+              const d = Date.parse(v);
+              if (!Number.isNaN(d)) return new Date(d);
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        return null;
+      }
+
+      function parseAlertCreatedAt(a: BackendAlert): Date | null {
+        const val = a.sentAt ?? a.createdAt ?? a.timestamp;
+        if (!val) return null;
+        const parsed = Date.parse(String(val));
+        return Number.isNaN(parsed) ? null : new Date(parsed);
+      }
+
+      const userRegisteredAt = getUserRegisteredAt();
+
+      const visibleAlerts = alerts.filter((a) => {
+        if (!userRegisteredAt) return true;
+        const ad = parseAlertCreatedAt(a);
+        return ad !== null && ad >= userRegisteredAt;
+      });
+
+      const unreadCount = visibleAlerts.filter((alert) => isAlertUnread(alert, seenAlertIds)).length;
       setUnreadPassengerAlerts(unreadCount);
     } catch {
       setUnreadPassengerAlerts(0);

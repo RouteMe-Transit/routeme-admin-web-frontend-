@@ -158,8 +158,54 @@ export default function PassengerAlertsPage() {
                 isUnread: alert.isUnread && !seenAlertIds.has(alert.id),
             }));
 
-            setAlerts(feedAlerts);
-            markPassengerAlertsAsSeen(feedAlerts.map((alert) => alert.id));
+                    // Filter alerts so a newly-registered passenger only sees alerts
+                    // created after their registration time. We look for common
+                    // timestamp fields on the alert and for likely created/registered
+                    // timestamp fields on the stored user object.
+                    function getUserRegisteredAt(): Date | null {
+                        try {
+                            const raw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+                            if (!raw) return null;
+                            const user = JSON.parse(raw) as Record<string, unknown>;
+
+                            const candidates = [
+                                "createdAt",
+                                
+                            ];
+
+                            for (const k of candidates) {
+                                const v = user[k];
+                                if (typeof v === "string") {
+                                    const d = Date.parse(v);
+                                    if (!Number.isNaN(d)) return new Date(d);
+                                }
+                            }
+                        } catch {
+                            // ignore parse errors
+                        }
+
+                        return null;
+                    }
+
+                    function parseAlertCreatedAt(a: BackendAlert): Date | null {
+                        const val = a.sentAt ?? a.createdAt ?? a.timestamp;
+                        if (!val) return null;
+                        const parsed = Date.parse(String(val));
+                        return Number.isNaN(parsed) ? null : new Date(parsed);
+                    }
+
+                    const userRegisteredAt = getUserRegisteredAt();
+
+                    const filtered = feedAlerts.filter((alert, idx) => {
+                        if (!userRegisteredAt) return true; // no registration time -> don't filter
+                        const raw = extractAlertList(payload)[idx];
+                        const alertDate = parseAlertCreatedAt(raw as BackendAlert);
+                        // Only include alerts that have a valid timestamp on or after registration
+                        return alertDate !== null && alertDate >= userRegisteredAt;
+                    });
+
+                    setAlerts(filtered);
+                    markPassengerAlertsAsSeen(filtered.map((alert) => alert.id));
         } catch {
             setAlerts([]);
             setError("Failed to load passenger alerts. Please try again.");
