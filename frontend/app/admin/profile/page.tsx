@@ -3,10 +3,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { CgClose } from "react-icons/cg";
+import { useAdminTheme } from "../AdminThemeContext";
 
 
 export default function AdminProfilePage() {
   const router = useRouter();
+  const { isDarkMode, toggleTheme } = useAdminTheme();
 
   const [user, setUser] = useState({
     firstName: "Kavindra",
@@ -94,9 +96,17 @@ export default function AdminProfilePage() {
           <img src="/icons/globe.svg" alt="Language" className="inline-block w-8 h-8 mr-5" />
           Language
         </button>
-        <button className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 border-b border-gray-300 hover:bg-gray-200">
-          <img src="/icons/moon.svg" alt="Dark Mode" className="inline-block w-8 h-8 mr-5" />
-          Dark Mode
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 border-b border-gray-300 hover:bg-gray-200"
+        >
+          <img
+            src={isDarkMode ? "/icons/sun.svg" : "/icons/moon.svg"}
+            alt={isDarkMode ? "Light Mode" : "Dark Mode"}
+            className="inline-block w-8 h-8 mr-5"
+          />
+          {isDarkMode ? "Light Mode" : "Dark Mode"}
         </button>
         <button onClick={handleLogout} className="w-75 h-12.5 bg-white font-bold text-md flex items-center pl-10 rounded-b-md hover:bg-gray-200">
           <img src="/icons/signout.png" alt="Sign Out" className="inline-block w-8 h-8 mr-5" />

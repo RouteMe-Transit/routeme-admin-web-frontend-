@@ -106,8 +106,7 @@ const menus = {
   ],
 
   admin: [
-    { id: "dashboard", label: "Dashboard", icon: <img src="/icons/dashboard.png" alt="Dashboard" className="h-7 w-7 object-contain" />, path: "/admin/dashboard" },
-    { id: "users", label: "Users", icon: <img src="/icons/users.png" alt="Users" className="h-7 w-7 object-contain" />, path: "/admin/users" },
+    // Dashboard and Users are now in the Overview section
   ],
 
   bus: [
@@ -119,6 +118,14 @@ const menus = {
 };
 
 const adminSections: MenuSection[] = [
+  {
+    id: "overview",
+    label: "Overview",
+    items: [
+      { id: "dashboard", label: "Dashboard", icon: <img src="/icons/dashboard.png" alt="Dashboard" className="h-7 w-7 object-contain" />, path: "/admin/dashboard" },
+      { id: "users", label: "Users", icon: <img src="/icons/users.png" alt="Users" className="h-7 w-7 object-contain" />, path: "/admin/users" },
+    ],
+  },
   {
     id: "operations",
     label: "Operations",
@@ -160,7 +167,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const pathname = usePathname();
   const [localGpsEnabled, setLocalGpsEnabled] = useState(false);
   const [unreadPassengerAlerts, setUnreadPassengerAlerts] = useState(0);
-  const [expandedSection, setExpandedSection] = useState<string | null>("operations");
+  const [expandedSection, setExpandedSection] = useState<string | null>("overview");
   const isGpsEnabled = gpsEnabled ?? localGpsEnabled;
 
   const loadUnreadPassengerAlerts = useCallback(async () => {
@@ -292,8 +299,6 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
         <div className="flex flex-col mt-3 space-y-2 px-2">
           {role === "admin" ? (
             <>
-              {renderMenuItem(items.find((item) => item.id === "dashboard") as MenuItem)}
-
               {adminSections.map((section) => {
                 const isExpanded = expandedSection === section.id;
 
@@ -319,8 +324,6 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
                   </div>
                 );
               })}
-
-              {renderMenuItem(items.find((item) => item.id === "users") as MenuItem)}
             </>
           ) : (
             items.map((item) => renderMenuItem(item))
