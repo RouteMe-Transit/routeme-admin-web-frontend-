@@ -46,7 +46,9 @@ export default function AdminReportsPage() {
 
   const markAsViewed = (reportId: number) => {
     setViewedReports((prev) =>
-      prev.includes(reportId) ? prev : [...prev, reportId]
+      prev.includes(reportId)
+        ? prev.filter((id) => id !== reportId)
+        : [...prev, reportId]
     );
   };
 
@@ -117,12 +119,12 @@ export default function AdminReportsPage() {
                     }`}
                     title={
                       viewedReports.includes(item.id)
-                        ? "Marked as viewed"
-                        : "Mark as viewed"
+                        ? "Click to mark as unviewed"
+                        : "Click to mark as viewed"
                     }
                     aria-label={
                       viewedReports.includes(item.id)
-                        ? "Marked as viewed"
+                        ? "Mark report as unviewed"
                         : "Mark report as viewed"
                     }
                   >

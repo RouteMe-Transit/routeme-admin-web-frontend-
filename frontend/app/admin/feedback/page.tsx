@@ -1,36 +1,89 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import api from "@/app/services/api";
 
 type TimeFilter = "all" | "today" | "month";
 
 type Feedback = {
-  id: number;
+  id: string;
   name: string;
   bus: string;
   category: string;
   comment: string;
   stars: number;
   date: string;
+  user?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+  busNumber?: string;
+  message?: string;
+  createdAt?: string;
 };
 
 export default function AdminFeedback() {
-  const feedbacks: Feedback[] = [
-    { id: 1, name: "K.Jayawardane", bus: "Bus 12", category: "Punctuality", comment: "The bus arrived exactly on time...", stars: 5, date: "2026-04-01" },
-    { id: 2, name: "M.L.Anusha", bus: "Bus 88", category: "Driver Behavior", comment: "The driver was over speeding and unsafe...", stars: 3, date: "2026-04-02" },
-    { id: 3, name: "B.Ranawaka", bus: "Bus 59", category: "Cleanliness", comment: "Bus was mostly clean and well maintained.", stars: 4, date: "2026-03-20" },
-    { id: 4, name: "W.Samarakoon", bus: "Bus 15", category: "Overall", comment: "Excellent service and comfortable ride.", stars: 5, date: "2026-04-03" },
-    { id: 5, name: "K.Minesh", bus: "Bus 33", category: "Safety", comment: "Bus was slightly overcrowded during peak hours.", stars: 3, date: "2026-03-28" },
-    { id: 6, name: "S.K.Perera", bus: "Bus 45", category: "Punctuality", comment: "The bus was 25 minutes late.", stars: 2, date: "2026-04-01" },
-  ];
-
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [starFilter, setStarFilter] = useState<number | "all">("all");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const today = new Date().toISOString().split("T")[0];
   const currentMonth = today.slice(0, 7);
+
+  const getAuthConfig = () => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    return {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    };
+  };
+
+  useEffect(() => {
+    const fetchFeedbacks = async () => {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const config = getAuthConfig();
+        const response = await api.get("/feedbacks", config);
+        const rawData = response.data?.data || response.data;
+        const feedbacksArray = Array.isArray(rawData) ? rawData : rawData?.feedbacks ?? [];
+        const normalized = feedbacksArray.map((item: any) => ({
+          id: item.id?.toString() || "",
+          name:
+            item.user?.firstName && item.user?.lastName
+              ? `${item.user.firstName} ${item.user.lastName}`
+              : item.user?.email || "Unknown User",
+          bus: item.bus || item.busNumber || "",
+          category: item.category || "",
+          comment: item.comment || item.message || "",
+          stars: item.stars || item.rating || 0,
+          date: item.date || new Date(item.createdAt).toISOString().split("T")[0],
+          user: item.user,
+          busNumber: item.busNumber,
+          message: item.message,
+          createdAt: item.createdAt,
+        }));
+        setFeedbacks(normalized);
+      } catch (err: any) {
+        console.error("Error loading feedbacks:", err);
+        if (err.response) {
+          console.error("Response status:", err.response.status);
+          console.error("Response data:", err.response.data);
+        }
+        setError("Unable to load feedbacks. Please refresh the page.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeedbacks();
+  }, []);
 
   // FILTER LOGIC
   const filteredFeedbacks = feedbacks.filter((fb) => {
@@ -53,6 +106,11 @@ export default function AdminFeedback() {
 
   return (
     <div className="min-h-screen p-8">
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* TOP FILTER BAR */}
       <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap items-center gap-4">
@@ -112,36 +170,40 @@ export default function AdminFeedback() {
         </div>
 
         {/* ROWS */}
-        {filteredFeedbacks.map((fb) => (
-          <div
-            key={fb.id}
-            className="grid grid-cols-8 items-center p-4 border-b hover:bg-gray-50"
-          >
-            {/* NAME (WIDER SPACE FIX) */}
-            <div className="col-span-2 flex items-center gap-3">
-              <div className="h-8 w-8 flex items-center justify-center rounded-full bg-blue-500 text-white font-bold">
-                {fb.name.charAt(0)}
+        {isLoading ? (
+          <div className="p-6 text-center text-gray-500">Loading feedbacks...</div>
+        ) : (
+          filteredFeedbacks.map((fb) => (
+            <div
+              key={fb.id}
+              className="grid grid-cols-8 items-center p-4 border-b hover:bg-gray-50"
+            >
+              {/* NAME (WIDER SPACE FIX) */}
+              <div className="col-span-2 flex items-center gap-3">
+                <div className="h-8 w-8 flex items-center justify-center rounded-full bg-blue-500 text-white font-bold">
+                  {fb.name.charAt(0)}
+                </div>
+                {fb.name}
               </div>
-              {fb.name}
-            </div>
 
-            <div>{fb.bus}</div>
-            <div>{fb.category}</div>
-            <div className="truncate">{fb.comment}</div>
-            <div className="text-yellow-500">{renderStars(fb.stars)}</div>
-            <div>{fb.date}</div>
+              <div>{fb.bus}</div>
+              <div>{fb.category}</div>
+              <div className="truncate">{fb.comment}</div>
+              <div className="text-yellow-500">{renderStars(fb.stars)}</div>
+              <div>{fb.date}</div>
 
-            {/* VIEW BUTTON */}
-            <div>
-              <button
-                onClick={() => setSelectedFeedback(fb)}
-                className="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-              >
-                View
-              </button>
+              {/* VIEW BUTTON */}
+              <div>
+                <button
+                  onClick={() => setSelectedFeedback(fb)}
+                  className="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                  View
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* MODAL */}
