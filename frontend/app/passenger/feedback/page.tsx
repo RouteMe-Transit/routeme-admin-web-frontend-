@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import api from "@/app/services/api";
 
 type Submission = {
   id: number;
@@ -30,6 +31,13 @@ const initialSubmissions: Submission[] = [
   },
 ];
 
+const getAuthConfig = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  };
+};
+
 export default function PassengerFeedback() {
   const [formData, setFormData] = useState({
     category: "",
@@ -40,6 +48,10 @@ export default function PassengerFeedback() {
 
   const [submissions, setSubmissions] =
     useState<Submission[]>(initialSubmissions);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // HANDLE INPUT
   const handleChange = (
@@ -61,27 +73,48 @@ export default function PassengerFeedback() {
   };
 
   // SUBMIT
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
 
-    const newSubmission: Submission = {
-      id: submissions.length + 1,
-      name: "You",
-      category: formData.category,
-      rating: formData.rating,
-      message: formData.message,
-      meta: `Now · ${formData.busNumber}`,
-    };
+    try {
+      const response = await api.post(
+        "/feedbacks",
+        {
+          category: formData.category,
+          busNumber: formData.busNumber,
+          message: formData.message,
+          rating: formData.rating,
+        },
+        getAuthConfig()
+      );
 
-    setSubmissions([newSubmission, ...submissions]);
+      const createdFeedback = response.data?.data || response.data;
+      const newSubmission: Submission = {
+        id: createdFeedback?.id || submissions.length + 1,
+        name: "You",
+        category: formData.category,
+        rating: formData.rating,
+        message: formData.message,
+        meta: `Now · ${formData.busNumber}`,
+      };
 
-    // RESET FORM
-    setFormData({
-      category: "",
-      busNumber: "",
-      message: "",
-      rating: 0,
-    });
+      setSubmissions([newSubmission, ...submissions]);
+      setSuccess("Feedback submitted successfully.");
+      setFormData({
+        category: "",
+        busNumber: "",
+        message: "",
+        rating: 0,
+      });
+    } catch (err: any) {
+      console.error(err);
+      setError("Unable to submit feedback. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -89,6 +122,16 @@ export default function PassengerFeedback() {
       <div className="w-full bg-white rounded-2xl shadow-md p-8">
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700">
+              {success}
+            </div>
+          )}
 
           {/* CATEGORY DROPDOWN (FIXED) */}
           <div>
