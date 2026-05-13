@@ -48,20 +48,6 @@ const editAdminSchema = z.object({
   lastName:  z.string().min(1, "Last name is required").max(50, "Too long"),
   email:     z.string().email("Please enter a valid email address"),
   phone:     z.string().optional(),
-  password:  z
-    .string()
-    .refine(
-      (val) => val === "" || val.length >= 8,
-      "Password must be at least 8 characters"
-    )
-    .refine(
-      (val) => val === "" || /[A-Z]/.test(val),
-      "Must contain at least one uppercase letter"
-    )
-    .refine(
-      (val) => val === "" || /[0-9]/.test(val),
-      "Must contain at least one number"
-    ),
 });
 
 type FormValues = {
@@ -252,7 +238,8 @@ export default function AdminManageUsers() {
       phone:     form.phone || undefined,
       role:      editingUser ? editingUser.role : "admin",
     };
-    if (form.password) payload.password = form.password;
+    // Password only included when creating a new admin
+    if (!editingUser && form.password) payload.password = form.password;
 
     try {
       if (editingUser) {
@@ -589,25 +576,20 @@ export default function AdminManageUsers() {
                 />
               </div>
 
-              {/* Password */}
-              <div className="col-span-2">
-                <label className={labelCls}>
-                  {editingUser
-                    ? "New Password"
-                    : "Password"}
-                  {editingUser && (
-                    <span className="normal-case font-medium text-gray-300 ml-1">(leave blank to keep current)</span>
-                  )}
-                </label>
-                <input
-                  type="password"
-                  className={fieldErrors.password ? inputError : inputNormal}
-                  placeholder={editingUser ? "Leave blank to keep unchanged" : "Min. 8 chars, 1 uppercase, 1 number"}
-                  value={form.password}
-                  onChange={(e) => setField("password", e.target.value)}
-                />
-                <FieldError msg={fieldErrors.password} />
-              </div>
+              {/* Password — only shown when adding a new admin */}
+              {!editingUser && (
+                <div className="col-span-2">
+                  <label className={labelCls}>Password</label>
+                  <input
+                    type="password"
+                    className={fieldErrors.password ? inputError : inputNormal}
+                    placeholder="Min. 8 chars, 1 uppercase, 1 number"
+                    value={form.password}
+                    onChange={(e) => setField("password", e.target.value)}
+                  />
+                  <FieldError msg={fieldErrors.password} />
+                </div>
+              )}
             </div>
 
             {/* Actions */}
