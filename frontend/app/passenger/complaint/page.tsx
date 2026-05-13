@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import api from "@/app/services/api";
 
 type Complaint = {
   id: number;
@@ -8,6 +9,13 @@ type Complaint = {
   busNumber: string;
   description: string;
   status: "Pending";
+};
+
+const getAuthConfig = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  };
 };
 
 export default function PassengerComplaint() {
@@ -18,6 +26,9 @@ export default function PassengerComplaint() {
   });
 
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -30,27 +41,49 @@ export default function PassengerComplaint() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
 
-    const newComplaint: Complaint = {
-      id: complaints.length + 1,
-      category: formData.category,
-      busNumber: formData.busNumber,
-      description: formData.description,
-      status: "Pending",
-    };
+    try {
+      const response = await api.post(
+        "/complaints",
+        {
+          category: formData.category,
+          busNumber: formData.busNumber,
+          description: formData.description,
+        },
+        getAuthConfig()
+      );
 
-    setComplaints([newComplaint, ...complaints]);
+      const createdComplaint = response.data?.data || response.data;
+      const newComplaint: Complaint = {
+        id: createdComplaint?.id || complaints.length + 1,
+        category: formData.category,
+        busNumber: formData.busNumber,
+        description: formData.description,
+        status: "Pending",
+      };
 
-    console.log("Submitted:", newComplaint);
-
-    // RESET FORM
-    setFormData({
-      category: "",
-      busNumber: "",
-      description: "",
-    });
+      setComplaints([newComplaint, ...complaints]);
+      setSuccess("Complaint submitted successfully.");
+      setFormData({
+        category: "",
+        busNumber: "",
+        description: "",
+      });
+    } catch (err: any) {
+      console.error("Complaint submit error:", err);
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Unable to submit complaint. Please try again.";
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -62,6 +95,16 @@ export default function PassengerComplaint() {
           <div className="w-full bg-white rounded-2xl shadow-md p-8">
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700">
+                  {success}
+                </div>
+              )}
 
               {/* CATEGORY DROPDOWN (FIXED) */}
               <div>

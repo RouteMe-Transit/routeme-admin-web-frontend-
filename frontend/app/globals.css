@@ -218,11 +218,508 @@ body {
     background-color: #1a2f47 !important;
 }
 
-.bus-theme[data-theme="dark"] .bus-trip-row {
+.admin-theme {
+    transition: background-color 200ms ease, color 200ms ease;
+}
+
+.admin-theme[data-theme="dark"] {
+    background: #0d1a2b;
+    color: #d8e4f2;
+}
+
+.admin-theme[data-theme="dark"] main {
+    background: #0d1a2b;
+}
+
+.admin-theme[data-theme="dark"] .admin-sidebar {
+    background: #0b1726;
+    border-right: 1px solid #1f3650;
+}
+
+.admin-theme[data-theme="dark"] .admin-topbar {
+    background: #14263a;
+    color: #e6eef7;
+    border-bottom: 1px solid #1f3650;
+}
+
+.admin-theme[data-theme="dark"] .bg-white {
     background-color: #14263a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-gray-100,
+.admin-theme[data-theme="dark"] .bg-slate-50,
+.admin-theme[data-theme="dark"] .bg-\[\#1228430F\] {
+    background-color: #1a2f47 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-gray-200,
+.admin-theme[data-theme="dark"] .bg-slate-100,
+.admin-theme[data-theme="dark"] .bg-slate-200,
+.admin-theme[data-theme="dark"] .bg-\[\#f5f7fa\],
+.admin-theme[data-theme="dark"] .bg-\[\#F8FAFC\],
+.admin-theme[data-theme="dark"] .bg-\[\#D9D9D980\] {
+    background-color: #102235 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-800,
+.admin-theme[data-theme="dark"] .text-gray-700,
+.admin-theme[data-theme="dark"] .text-gray-600,
+.admin-theme[data-theme="dark"] .text-slate-700,
+.admin-theme[data-theme="dark"] .text-slate-600,
+.admin-theme[data-theme="dark"] .text-black,
+.admin-theme[data-theme="dark"] .text-\[\#122843\] {
+    color: #d8e4f2 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-900 {
+    color: #f1f6ff !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-500,
+.admin-theme[data-theme="dark"] .text-slate-500,
+.admin-theme[data-theme="dark"] .text-\[\#94A0AE\] {
+    color: #a9bdd4 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-400 {
+    color: #91aac5 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-300 {
+    color: #7f9ab8 !important;
+}
+
+.admin-theme[data-theme="dark"] .border,
+.admin-theme[data-theme="dark"] .border-gray-300,
+.admin-theme[data-theme="dark"] .border-slate-300,
+.admin-theme[data-theme="dark"] .border-gray-700,
+.admin-theme[data-theme="dark"] .border-gray-600,
+.admin-theme[data-theme="dark"] .border-\[\#94A0AE\] {
     border-color: #2b4766 !important;
 }
 
+.admin-theme[data-theme="dark"] input,
+.admin-theme[data-theme="dark"] select,
+.admin-theme[data-theme="dark"] textarea {
+    background-color: #102235;
+    color: #e6eef7;
+    border-color: #2b4766;
+}
+
+.admin-theme[data-theme="dark"] .hover\:bg-gray-200:hover {
+    background-color: #213a56 !important;
+}
+
+.admin-theme[data-theme="dark"] .hover\:bg-blue-50:hover {
+    background-color: #263f5e !important;
+}
+.admin-theme[data-theme="dark"] .bg-emerald-100 {
+    background-color: #1a3d2e !important;
+}
+
+.admin-theme[data-theme="dark"] .text-emerald-700 {
+    color: #4ade80 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-yellow-100 {
+    background-color: #3d2d1a !important;
+}
+
+.admin-theme[data-theme="dark"] .text-yellow-700 {
+    color: #eab308 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-red-100 {
+    background-color: #3d1a1a !important;
+}
+
+.admin-theme[data-theme="dark"] .text-red-600,
+.admin-theme[data-theme="dark"] .text-red-500 {
+    color: #ef4444 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-violet-500 {
+    background-color: #7c3aed !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-pink-500 {
+    background-color: #ec4899 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-rose-400 {
+    background-color: #fb7185 !important;
+}
+
+/* Table headers in admin pages */
+.admin-theme[data-theme="dark"] .bg-\[#f8fafc\] {
+    background-color: #0f1e33 !important;
+    border-color: #1f3650 !important;
+    color: #d8e4f2 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-indigo-500 {
+    background-color: #6366f1 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-cyan-500 {
+    background-color: #06b6d4 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-amber-500 {
+    background-color: #f59e0b !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-green-500 {
+    background-color: #10b981 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-blue-500 {
+    background-color: #3b82f6 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-purple-500 {
+    background-color: #8b5cf6 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-orange-500 {
+    background-color: #f97316 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-teal-500 {
+    background-color: #14b8a6 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-lime-500 {
+    background-color: #84cc16 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-sky-500 {
+    background-color: #0ea5e9 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-stone-500 {
+    background-color: #78716c !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-neutral-500 {
+    background-color: #737373 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-slate-500 {
+    background-color: #64748b !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-zinc-500 {
+    background-color: #71717a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-gray-500 {
+    background-color: #6b7280 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-green-600 {
+    color: #16a34a !important;
+}
+
+.admin-theme[data-theme="dark"] .text-blue-600 {
+    color: #2563eb !important;
+}
+
+.admin-theme[data-theme="dark"] .text-purple-600 {
+    color: #7c3aed !important;
+}
+
+.admin-theme[data-theme="dark"] .text-orange-600 {
+    color: #ea580c !important;
+}
+
+.admin-theme[data-theme="dark"] .text-teal-600 {
+    color: #0d9488 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-lime-600 {
+    color: #65a30d !important;
+}
+
+.admin-theme[data-theme="dark"] .text-sky-600 {
+    color: #0284c7 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-stone-600 {
+    color: #57534e !important;
+}
+
+.admin-theme[data-theme="dark"] .text-neutral-600 {
+    color: #525252 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-slate-600 {
+    color: #475569 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-zinc-600 {
+    color: #52525b !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-600 {
+    color: #4b5563 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-green-500 {
+    color: #22c55e !important;
+}
+
+.admin-theme[data-theme="dark"] .text-blue-500 {
+    color: #3b82f6 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-purple-500 {
+    color: #8b5cf6 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-orange-500 {
+    color: #f97316 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-teal-500 {
+    color: #14b8a6 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-lime-500 {
+    color: #84cc16 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-sky-500 {
+    color: #0ea5e9 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-stone-500 {
+    color: #78716c !important;
+}
+
+.admin-theme[data-theme="dark"] .text-neutral-500 {
+    color: #737373 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-slate-500 {
+    color: #64748b !important;
+}
+
+.admin-theme[data-theme="dark"] .text-zinc-500 {
+    color: #71717a !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-500 {
+    color: #6b7280 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-green-400 {
+    color: #4ade80 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-blue-400 {
+    color: #60a5fa !important;
+}
+
+.admin-theme[data-theme="dark"] .text-purple-400 {
+    color: #a78bfa !important;
+}
+
+.admin-theme[data-theme="dark"] .text-orange-400 {
+    color: #fb923c !important;
+}
+
+.admin-theme[data-theme="dark"] .text-teal-400 {
+    color: #2dd4bf !important;
+}
+
+.admin-theme[data-theme="dark"] .text-lime-400 {
+    color: #a3e635 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-sky-400 {
+    color: #38bdf8 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-stone-400 {
+    color: #9ca3af !important;
+}
+
+.admin-theme[data-theme="dark"] .text-neutral-400 {
+    color: #a3a3a3 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-slate-400 {
+    color: #94a3b8 !important;
+}
+
+.admin-theme[data-theme="dark"] .text-zinc-400 {
+    color: #a1a1aa !important;
+}
+
+.admin-theme[data-theme="dark"] .text-gray-400 {
+    color: #9ca3af !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-green-100 {
+    background-color: #1a3d2e !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-blue-100 {
+    background-color: #1e293b !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-purple-100 {
+    background-color: #2d1b69 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-orange-100 {
+    background-color: #3d1a0a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-teal-100 {
+    background-color: #0f2f2f !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-lime-100 {
+    background-color: #2d3a0a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-sky-100 {
+    background-color: #0c2d3d !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-stone-100 {
+    background-color: #292524 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-neutral-100 {
+    background-color: #1f1f1f !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-slate-100 {
+    background-color: #1e293b !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-zinc-100 {
+    background-color: #27272a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-gray-100 {
+    background-color: #1f2937 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-green-50 {
+    background-color: #0f2f1f !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-blue-50 {
+    background-color: #172554 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-purple-50 {
+    background-color: #1e1b4b !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-orange-50 {
+    background-color: #2d1a0a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-teal-50 {
+    background-color: #0a2a2a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-lime-50 {
+    background-color: #1f2d0a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-sky-50 {
+    background-color: #0a2a3d !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-stone-50 {
+    background-color: #1c1917 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-neutral-50 {
+    background-color: #171717 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-slate-50 {
+    background-color: #0f172a !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-zinc-50 {
+    background-color: #1f1f23 !important;
+}
+
+.admin-theme[data-theme="dark"] .bg-gray-50 {
+    background-color: #111827 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-green-200 {
+    border-color: #16a34a !important;
+}
+
+.admin-theme[data-theme="dark"] .border-blue-200 {
+    border-color: #3b82f6 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-purple-200 {
+    border-color: #8b5cf6 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-orange-200 {
+    border-color: #f97316 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-teal-200 {
+    border-color: #14b8a6 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-lime-200 {
+    border-color: #84cc16 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-sky-200 {
+    border-color: #0ea5e9 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-stone-200 {
+    border-color: #a8a29e !important;
+}
+
+.admin-theme[data-theme="dark"] .border-neutral-200 {
+    border-color: #a3a3a3 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-slate-200 {
+    border-color: #94a3b8 !important;
+}
+
+.admin-theme[data-theme="dark"] .border-zinc-200 {
+    border-color: #a1a1aa !important;
+}
+
+.admin-theme[data-theme="dark"] .border-gray-200 {
+    border-color: #9ca3af !important;
+}
+
+.admin-theme[data-theme="dark"] .shadow-sm {
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5) !important;
+}
+
+.admin-theme[data-theme="dark"] .shadow-md {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.5) !important;
+}
+
+.admin-theme[data-theme="dark"] .shadow-lg {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.5) !important;
+}
+
+.admin-theme[data-theme="dark"] .shadow-xl {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5) !important;
+}
 .bus-theme[data-theme="dark"] .bus-trip-row:nth-child(even) {
     background-color: #102235 !important;
 }

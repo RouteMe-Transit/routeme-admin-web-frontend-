@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import api from "@/app/services/api";
 
 type Complaint = {
   id: string;
@@ -10,82 +11,131 @@ type Complaint = {
   message: string;
   date: string;
   status: "Pending" | "Resolved";
+  createdAt?: string;
+  user?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+  busNumber?: string;
+  description?: string;
 };
 
 export default function AdminComplaints() {
-  const stats = [
-    { title: "Total This Week", value: 42, icon: "💬" },
-    { title: "Pending", value: 14, icon: "⏳" },
-    { title: "Resolved", value: 28, icon: "✅" },
-  ];
-
-  const initialComplaints: Complaint[] = [
-    {
-      id: "C-101",
-      passenger: "K.Senarathna",
-      category: "Punctuality",
-      bus: "Bus 12",
-      message:
-        "Bus was 15 mins late due to traffic congestion near Colombo road.",
-      date: "Mar 5, 2026",
-      status: "Resolved",
-    },
-    {
-      id: "C-102",
-      passenger: "S.Rathnayake",
-      category: "Driver Behavior",
-      bus: "Bus 45",
-      message: "Driver was rude and refused to stop at designated stop.",
-      date: "Mar 5, 2026",
-      status: "Resolved",
-    },
-    {
-      id: "C-103",
-      passenger: "M.Fernando",
-      category: "Punctuality",
-      bus: "Bus 7",
-      message:
-        "Bus missed the stop even after signaling multiple times.",
-      date: "Mar 3, 2026",
-      status: "Pending",
-    },
-    {
-      id: "C-104",
-      passenger: "T.Kumara",
-      category: "Route Issue",
-      bus: "Bus 35",
-      message:
-        "Route was changed without prior notice causing confusion.",
-      date: "Mar 5, 2026",
-      status: "Pending",
-    },
-  ];
-
   // STATES
-  const [complaints, setComplaints] =
-    useState<Complaint[]>(initialComplaints);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [selectedComplaint, setSelectedComplaint] =
-    useState<Complaint | null>(null);
+  const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const stats = [
+    { title: "Total This Week", value: complaints.length, icon: "💬" },
+    {
+      title: "Pending",
+      value: complaints.filter((item) => item.status === "Pending").length,
+      icon: "⏳",
+    },
+    {
+      title: "Resolved",
+      value: complaints.filter((item) => item.status === "Resolved").length,
+      icon: "✅",
+    },
+  ];
+
+  const getAuthConfig = () => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    console.log("Token retrieved:", token);
+
+    return {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    };
+  };
 
   // STATUS TOGGLE
-  const toggleStatus = (id: string) => {
-    setComplaints((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: item.status === "Pending" ? "Resolved" : "Pending",
-            }
-          : item
-      )
-    );
+  const toggleStatus = async (id: string) => {
+    try {
+      const current = complaints.find((item) => item.id === id);
+      if (!current) return;
+
+      const newStatus = current.status === "Pending" ? "Resolved" : "Pending";
+      const response = await api.patch(
+        `/complaints/${id}/status`,
+        { status: newStatus },
+        getAuthConfig()
+      );
+      const updatedComplaint = response.data?.data || response.data;
+
+      setComplaints((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: updatedComplaint?.status || newStatus,
+              }
+            : item
+        )
+      );
+    } catch (err: any) {
+      console.error("Error updating complaint status:", err);
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Unable to update complaint status. Please try again.";
+      setError(message);
+    }
   };
 
   // FILTER LOGIC
+  useEffect(() => {
+    const fetchComplaints = async () => {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const config = getAuthConfig();
+        console.log("Auth config for GET /complaints:", config);
+        const response = await api.get("/complaints", config);
+        const rawData = response.data?.data || response.data;
+        const complaintsArray =
+          Array.isArray(rawData) ? rawData : rawData?.complaints ?? [];
+        const normalized = complaintsArray.map((item: any) => ({
+          id: item.id?.toString() || "",
+          passenger:
+            item.passenger ||
+            (item.user?.firstName && item.user?.lastName
+              ? `${item.user.firstName} ${item.user.lastName}`
+              : item.user?.email || "Unknown Passenger"),
+          category: item.category || "",
+          bus: item.bus || item.busNumber || "",
+          message: item.message || item.description || "",
+          date: item.date || new Date(item.createdAt).toLocaleDateString(),
+          status: item.status || "Pending",
+          user: item.user,
+          busNumber: item.busNumber,
+          description: item.description,
+          createdAt: item.createdAt,
+        }));
+        setComplaints(normalized);
+      } catch (err: any) {
+        console.error("Error loading complaints:", err);
+        if (err.response) {
+          console.error("Response status:", err.response.status);
+          console.error("Response data:", err.response.data);
+        }
+        setError("Unable to load complaints. Please refresh the page.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchComplaints();
+  }, []);
+
   const filteredComplaints = complaints.filter((item) => {
     const matchSearch =
       item.passenger.toLowerCase().includes(search.toLowerCase()) ||
@@ -103,6 +153,11 @@ export default function AdminComplaints() {
 
   return (
     <div className="min-h-screen p-8 ">
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* STATS (FIXED ORIGINAL LAYOUT) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -171,55 +226,61 @@ export default function AdminComplaints() {
 
         {/* ROWS */}
         <div>
-          {filteredComplaints.map((item) => (
-            <div
-              key={item.id}
-              className="grid grid-cols-8 px-4 py-3 border-b hover:bg-gray-50 items-center"
-            >
-              <div>{item.id}</div>
-              <div>{item.passenger}</div>
-              <div>{item.category}</div>
-              <div>{item.bus}</div>
-              <div className="truncate">{item.message}</div>
-              <div>{item.date}</div>
-
-              {/* STATUS */}
-              <div>
-                <span
-                  className={`px-3 py-1 text-xs rounded-lg font-semibold ${
-                    item.status === "Resolved"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-yellow-100 text-yellow-700"
-                  }`}
+          {isLoading ? (
+            <div className="p-6 text-center text-gray-500">Loading complaints...</div>
+          ) : (
+            filteredComplaints.map((item) => {
+              return (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-8 px-4 py-3 border-b hover:bg-gray-50 items-center"
                 >
-                  {item.status}
-                </span>
-              </div>
+                  <div>{item.id}</div>
+                  <div>{item.passenger}</div>
+                  <div>{item.category}</div>
+                  <div>{item.bus}</div>
+                  <div className="truncate">{item.message}</div>
+                  <div>{item.date}</div>
 
-              {/* ACTIONS */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedComplaint(item)}
-                  className="px-2 py-1 text-xs bg-blue-500 text-white rounded"
-                >
-                  View
-                </button>
+                  {/* STATUS */}
+                  <div>
+                    <span
+                      className={`px-3 py-1 text-xs rounded-lg font-semibold ${
+                        item.status === "Resolved"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
 
-                <button
-                  onClick={() => toggleStatus(item.id)}
-                  className={`px-2 py-1 text-xs rounded text-white ${
-                    item.status === "Pending"
-                      ? "bg-green-500"
-                      : "bg-yellow-500"
-                  }`}
-                >
-                  {item.status === "Pending"
-                    ? "Mark Resolved"
-                    : "Mark Pending"}
-                </button>
-              </div>
-            </div>
-          ))}
+                  {/* ACTIONS */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedComplaint(item)}
+                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded"
+                    >
+                      View
+                    </button>
+
+                    <button
+                      onClick={() => toggleStatus(item.id)}
+                      className={`px-2 py-1 text-xs rounded text-white ${
+                        item.status === "Pending"
+                          ? "bg-green-500"
+                          : "bg-yellow-500"
+                      }`}
+                    >
+                      {item.status === "Pending"
+                        ? "Mark Resolved"
+                        : "Mark Pending"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
