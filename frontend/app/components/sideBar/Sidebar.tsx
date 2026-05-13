@@ -7,6 +7,7 @@ import api from "@/app/services/api";
 import SidebarItem from "./SidebarItem";
 import LogoNname from "../logoNname/logoNname";
 import { FaPowerOff } from "react-icons/fa6";
+import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import {
   PASSENGER_ALERTS_CHANGED_EVENT,
   getSeenPassengerAlertIds,
@@ -17,6 +18,12 @@ type MenuItem = {
   label: string;
   icon: React.ReactNode;
   path?: string;
+};
+
+type MenuSection = {
+  id: string;
+  label: string;
+  items: MenuItem[];
 };
 
 type BackendAlert = {
@@ -100,22 +107,7 @@ const menus = {
 
   admin: [
     { id: "dashboard", label: "Dashboard", icon: <img src="/icons/dashboard.png" alt="Dashboard" className="h-7 w-7 object-contain" />, path: "/admin/dashboard" },
-    { id: "fleet", label: "Fleet Monitor", icon: <img src="/icons/map.png" alt="Fleet Monitoring" className="h-7 w-7 object-contain" />, path: "/admin/fleetMonitor" },
-    { id: "routes", label: "Manage Routes", icon: <img src="/icons/manageRoutes.png" alt="Route" className="h-7 w-7 object-contain" />, path: "/admin/manageRoutes" },
-    { id: "buses", label: "Manage Buses", icon: <img src="/icons/bus.png" alt="Bus" className="h-7 w-7 object-contain" />, path: "/admin/manageBuses" },
-    { id: "stops", label: "Manage Stops", icon: <img src="/icons/bus-stops.png" alt="Feedback" className="h-7 w-7 object-contain" />, path: "/admin/manageStops" },
-    { id: "news", label: "Publish News", icon: <img src="/icons/newspaper.png" alt="News" className="h-7 w-7 object-contain" />, path: "/admin/publishNews" },
-    {
-      id: "alerts",
-      label: "Send Alert",
-      icon: <img src="/icons/alarm.png" alt="Alarm" className="h-7 w-7 object-contain" />,
-      path: "/admin/alerts",
-    },
     { id: "users", label: "Users", icon: <img src="/icons/users.png" alt="Users" className="h-7 w-7 object-contain" />, path: "/admin/users" },
-    { id: "reports", label: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="h-7 w-7 object-contain" />, path: "/admin/reports" },
-    { id: "complaints", label: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaint" className="h-7 w-7 object-contain" />, path: "/admin/complaints" },
-    { id: "feedback", label: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="h-7 w-7 object-contain" />, path: "/admin/feedback" },
-    
   ],
 
   bus: [
@@ -125,6 +117,37 @@ const menus = {
     { id: "bus", label: "Bus", icon: <img src="/icons/bus.png" alt="Bus" className="h-7 w-7 object-contain" />, path: "/bus/profile" },
   ],
 };
+
+const adminSections: MenuSection[] = [
+  {
+    id: "operations",
+    label: "Operations",
+    items: [
+      { id: "fleet", label: "Fleet Monitor", icon: <img src="/icons/map.png" alt="Fleet Monitor" className="h-7 w-7 object-contain" />, path: "/admin/fleetMonitor" },
+      { id: "routes", label: "Routes", icon: <img src="/icons/manageRoutes.png" alt="Routes" className="h-7 w-7 object-contain" />, path: "/admin/manageRoutes" },
+      { id: "buses", label: "Buses", icon: <img src="/icons/bus.png" alt="Buses" className="h-7 w-7 object-contain" />, path: "/admin/manageBuses" },
+      { id: "stops", label: "Stops", icon: <img src="/icons/bus-stops.png" alt="Stops" className="h-7 w-7 object-contain" />, path: "/admin/manageStops" },
+      { id: "scheduling", label: "Scheduling", icon: <img src="/icons/trip.png" alt="Scheduling" className="h-7 w-7 object-contain" />, path: "/admin/tripSchedule" },
+    ],
+  },
+  {
+    id: "communication",
+    label: "Communication",
+    items: [
+      { id: "alerts", label: "Alerts", icon: <img src="/icons/alarm.png" alt="Alerts" className="h-7 w-7 object-contain" />, path: "/admin/alerts" },
+      { id: "news", label: "News", icon: <img src="/icons/newspaper.png" alt="News" className="h-7 w-7 object-contain" />, path: "/admin/publishNews" },
+    ],
+  },
+  {
+    id: "support",
+    label: "Support",
+    items: [
+      { id: "complaints", label: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaints" className="h-7 w-7 object-contain" />, path: "/admin/complaints" },
+      { id: "feedback", label: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="h-7 w-7 object-contain" />, path: "/admin/feedback" },
+      { id: "reports", label: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="h-7 w-7 object-contain" />, path: "/admin/reports" },
+    ],
+  },
+];
 
 type Props = {
   role: "passenger" | "admin" | "bus";
@@ -137,6 +160,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const pathname = usePathname();
   const [localGpsEnabled, setLocalGpsEnabled] = useState(false);
   const [unreadPassengerAlerts, setUnreadPassengerAlerts] = useState(0);
+  const [expandedSection, setExpandedSection] = useState<string | null>("operations");
   const isGpsEnabled = gpsEnabled ?? localGpsEnabled;
 
   const loadUnreadPassengerAlerts = useCallback(async () => {
@@ -158,7 +182,54 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
       const seenAlertIds = getSeenPassengerAlertIds();
       const alerts = extractAlertList(payload);
 
-      const unreadCount = alerts.filter((alert) => isAlertUnread(alert, seenAlertIds)).length;
+      // Determine user registration time (if available) from stored user object.
+      function getUserRegisteredAt(): Date | null {
+        try {
+          const raw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+          if (!raw) return null;
+          const user = JSON.parse(raw) as Record<string, unknown>;
+
+          const candidates = [
+            "createdAt",
+            "created_at",
+            "registeredAt",
+            "registered_at",
+            "joinedAt",
+            "joined_at",
+            "created",
+            "registeredOn",
+          ];
+
+          for (const k of candidates) {
+            const v = user[k];
+            if (typeof v === "string") {
+              const d = Date.parse(v);
+              if (!Number.isNaN(d)) return new Date(d);
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        return null;
+      }
+
+      function parseAlertCreatedAt(a: BackendAlert): Date | null {
+        const val = a.sentAt ?? a.createdAt ?? a.timestamp;
+        if (!val) return null;
+        const parsed = Date.parse(String(val));
+        return Number.isNaN(parsed) ? null : new Date(parsed);
+      }
+
+      const userRegisteredAt = getUserRegisteredAt();
+
+      const visibleAlerts = alerts.filter((a) => {
+        if (!userRegisteredAt) return true;
+        const ad = parseAlertCreatedAt(a);
+        return ad !== null && ad >= userRegisteredAt;
+      });
+
+      const unreadCount = visibleAlerts.filter((alert) => isAlertUnread(alert, seenAlertIds)).length;
       setUnreadPassengerAlerts(unreadCount);
     } catch {
       setUnreadPassengerAlerts(0);
@@ -186,6 +257,28 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
 
   const items = menus[role] as MenuItem[];
 
+  const renderMenuItem = (item: MenuItem, indented = false) => {
+    const isPassengerAlerts = role === "passenger" && item.id === "alerts";
+
+    return (
+      <div key={item.id} className={indented ? "pl-5" : ""}>
+        <SidebarItem
+          label={item.label}
+          icon={item.icon}
+          active={item.path ? pathname === item.path : false}
+          badgeCount={isPassengerAlerts && unreadPassengerAlerts > 0 ? unreadPassengerAlerts : undefined}
+          onClick={() => {
+            if (item.path) router.push(item.path);
+          }}
+        />
+      </div>
+    );
+  };
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSection((prev) => (prev === sectionId ? null : sectionId));
+  };
+
   return (
     <div
       className={`h-screen bg-[#122843] text-white flex flex-col sticky top-0 z-20 ${role === "passenger" ? "passenger-sidebar" : ""} ${role === "bus" ? "bus-sidebar" : ""} ${role === "admin" ? "admin-sidebar" : ""}`}
@@ -197,22 +290,41 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
 
         {/* Menu */}
         <div className="flex flex-col mt-3 space-y-2 px-2">
-          {items.map((item) => {
-            const isPassengerAlerts = role === "passenger" && item.id === "alerts";
+          {role === "admin" ? (
+            <>
+              {renderMenuItem(items.find((item) => item.id === "dashboard") as MenuItem)}
 
-            return (
-              <SidebarItem
-                key={item.id}
-                label={item.label}
-                icon={item.icon}
-                active={item.path ? pathname === item.path : false}
-                badgeCount={isPassengerAlerts && unreadPassengerAlerts > 0 ? unreadPassengerAlerts : undefined}
-                onClick={() => {
-                  if (item.path) router.push(item.path);
-                }}
-              />
-            );
-          })}
+              {adminSections.map((section) => {
+                const isExpanded = expandedSection === section.id;
+
+                return (
+                  <div key={section.id} className="space-y-1">
+                    <button
+                      onClick={() => toggleSection(section.id)}
+                      className="w-full flex items-center justify-between px-6 py-2 text-left rounded-md text-gray-200 hover:bg-gray-700 transition"
+                    >
+                      <span className="font-semibold text-lg">{section.label}</span>
+                      {isExpanded ? (
+                        <IoIosArrowUp className="text-xl text-gray-300" />
+                      ) : (
+                        <IoIosArrowDown className="text-xl text-gray-300" />
+                      )}
+                    </button>
+
+                    {isExpanded && (
+                      <div className="space-y-1">
+                        {section.items.map((item) => renderMenuItem(item, true))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {renderMenuItem(items.find((item) => item.id === "users") as MenuItem)}
+            </>
+          ) : (
+            items.map((item) => renderMenuItem(item))
+          )}
         </div>
 
         {/* Footer */}
