@@ -18,12 +18,13 @@ type LiveTrackingMapProps = {
 };
 
 export default function LiveTrackingMap({ buses }: LiveTrackingMapProps) {
+  console.log(buses);
   return (
     <div className="w-full h-125 rounded-xl overflow-hidden">
       <MapContainer center={[6.9271, 79.8612]} zoom={12} className="h-full w-full">
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {buses.map((bus) => (
-          <Marker key={bus.id} position={[bus.latitude, bus.longitude]}>
+          <Marker key={bus.id} position={[bus.latitude, bus.longitude]} > 
             <Popup>
               <div className="text-sm text-slate-700">
                 <p className="font-semibold">{bus.id}</p>

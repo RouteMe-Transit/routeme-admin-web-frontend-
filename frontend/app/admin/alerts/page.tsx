@@ -62,6 +62,7 @@ type CreatedBy = {
 
 type AlertHistoryItem = {
   id: string | number;
+  displayId?: string;
   title: string;
   description: string;
   type: AlertTypeValue;
@@ -134,6 +135,9 @@ function AlertHistoryViewModal({ item, onClose }: AlertHistoryViewModalProps) {
         <div className="space-y-2 text-sm text-gray-700">
           <p>
             <strong>Title:</strong> {item.title}
+          </p>
+          <p>
+            <strong>ID:</strong> {item.displayId ?? item.id}
           </p>
           <p>
             <strong>Type:</strong> {ALERT_LABEL_MAP[item.type]}
@@ -319,6 +323,7 @@ function AlertHistoryItemCard({ item, onView }: AlertHistoryItemCardProps) {
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-800">{item.title}</p>
           <p className="text-xs text-gray-500">{ALERT_LABEL_MAP[item.type]}</p>
+          <p className="text-xs text-gray-400">ID: {item.displayId ?? item.id}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -461,6 +466,15 @@ const extractAlertList = (responseData: unknown): BackendAlert[] => {
 
 const mapBackendAlert = (item: BackendAlert): AlertHistoryItem => {
   const id = item.id ?? item._id ?? item.alertId ?? Date.now();
+  function formatAltId(rawId: unknown, prefix = "ALT", width = 4): string {
+    if (rawId === null || rawId === undefined) return `${prefix}${"0".repeat(width)}`;
+    const s = String(rawId).trim();
+    const m = s.match(/(\d+)$/);
+    const digits = m ? m[1] : s.replace(/\D/g, "");
+    if (digits) return `${prefix}${digits.padStart(width, "0")}`;
+    return s;
+  }
+  const displayId = formatAltId(id);
   const createdBy = item.createdBy
     ? {
         type: item.createdBy.type ?? "admin",
@@ -471,6 +485,7 @@ const mapBackendAlert = (item: BackendAlert): AlertHistoryItem => {
 
   return {
     id,
+    displayId,
     title: item.title ?? "Untitled Alert",
     description: item.description ?? "",
     type: normalizeAlertType(item.alertType ?? item.type),
@@ -830,7 +845,7 @@ export default function AdminAlertsPage() {
               ) : filteredAlerts.length > 0 ? (
                 filteredAlerts.map((item) => (
                   <div key={item.id} className="grid grid-cols-[90px_1.1fr_1fr_1fr_1.4fr_1.1fr_1fr_110px_70px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition">
-                    <div className="font-semibold text-[#122843] whitespace-nowrap">{item.id}</div>
+                    <div className="font-semibold text-[#122843] whitespace-nowrap">{item.displayId ?? item.id}</div>
                     <div className="font-medium text-gray-700">{ALERT_LABEL_MAP[item.type]}</div>
                     <div className="text-gray-600">{item.affectedBus || "—"}</div>
                     <div className="text-gray-600">{item.affectedRoute || "—"}</div>

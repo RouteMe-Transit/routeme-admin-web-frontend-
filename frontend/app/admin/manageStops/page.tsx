@@ -83,7 +83,7 @@ function StatCard({ icon, bg, value, label, color }: {
 }) {
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
-      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
         {icon}
       </div>
       <div>
@@ -102,6 +102,21 @@ const flattenZodErrors = (issues: ZodIssue[]): FieldErrors => {
 };
 
 const emptyForm = (): StopFormValues => ({ stopName: "", latitude: "", longitude: "" });
+
+function formatStopId(rawId: number | string | null | undefined, prefix = "ST", width = 4): string {
+  if (rawId === null || rawId === undefined) {
+    return `${prefix}${"0".repeat(width)}`;
+  }
+
+  const text = String(rawId).trim();
+  const trailingDigits = text.match(/(\d+)$/)?.[1] ?? text.replace(/\D/g, "");
+
+  if (trailingDigits) {
+    return `${prefix}${trailingDigits.padStart(width, "0")}`;
+  }
+
+  return text;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AdminManageStopsPage() {
@@ -223,7 +238,7 @@ export default function AdminManageStopsPage() {
       {/* ── TOOLBAR ── */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 w-72 shadow-sm">
-          <IoSearch className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <IoSearch className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             type="text"
             placeholder="Search stops..."
@@ -246,8 +261,8 @@ export default function AdminManageStopsPage() {
 
         {/* Header */}
         <div className="grid grid-cols-[60px_1fr_120px_120px_110px_110px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
-          <div>#</div>
-          <div>Stop Name</div>
+          <div>Stop ID</div>
+          <div className="ml-5">Stop Name</div>
           <div>Latitude</div>
           <div>Longitude</div>
           <div>Status</div>
@@ -277,13 +292,11 @@ export default function AdminManageStopsPage() {
               } hover:bg-blue-50/30`}
             >
               <div className="font-mono text-[11px] font-bold text-gray-400 tracking-wider">
-                #{stop.id}
+                {formatStopId(stop.id)}
               </div>
 
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                  <MdLocationOn className="w-4 h-4 text-blue-500" />
-                </div>
+              <div className="flex items-center gap-2 min-w-0 ml-5">
+                
                 <span className="font-semibold text-gray-800 text-sm truncate">{stop.stopName}</span>
               </div>
 
@@ -296,7 +309,7 @@ export default function AdminManageStopsPage() {
                     ? "bg-emerald-100 text-emerald-700"
                     : "bg-amber-100 text-amber-700"
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stop.isActive ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${stop.isActive ? "bg-emerald-500" : "bg-amber-500"}`} />
                   {stop.isActive ? "Active" : "Suspended"}
                 </span>
               </div>
@@ -340,7 +353,7 @@ export default function AdminManageStopsPage() {
             >✕</button>
 
             <div className="mb-6 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#122843] flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-[#122843] flex items-center justify-center shrink-0">
                 {editId !== null
                   ? <MdEditLocationAlt className="w-6 h-6 text-white" />
                   : <TbMapPin className="w-6 h-6 text-white" />}
