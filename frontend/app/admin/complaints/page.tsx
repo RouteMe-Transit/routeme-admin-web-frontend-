@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import api from "@/app/services/api";
+import { IoSearch, IoEye } from "react-icons/io5";
+import { FiAlertOctagon, FiCheckCircle, FiMessageCircle } from "react-icons/fi";
 
 type Complaint = {
   id: string;
+  displayId?: string;
   passenger: string;
   category: string;
   bus: string;
@@ -32,17 +35,23 @@ export default function AdminComplaints() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  function formatComplaintId(rawId: string, prefix = "CP", width = 4): string {
+    const text = String(rawId).trim();
+    const digits = text.match(/(\d+)$/)?.[1] ?? text.replace(/\D/g, "");
+    return digits ? `${prefix}${digits.padStart(width, "0")}` : text;
+  }
+
   const stats = [
-    { title: "Total This Week", value: complaints.length, icon: "💬" },
+    { title: "Total This Week", value: complaints.length, icon: <FiMessageCircle className="h-6 w-6 text-blue-500" />, bg: "bg-blue-50", color: "text-blue-600" },
     {
       title: "Pending",
       value: complaints.filter((item) => item.status === "Pending").length,
-      icon: "⏳",
+      icon: <FiAlertOctagon className="h-6 w-6 text-amber-500" />, bg: "bg-amber-50", color: "text-amber-600",
     },
     {
       title: "Resolved",
       value: complaints.filter((item) => item.status === "Resolved").length,
-      icon: "✅",
+      icon: <FiCheckCircle className="h-6 w-6 text-emerald-500" />, bg: "bg-emerald-50", color: "text-emerald-600",
     },
   ];
 
@@ -105,6 +114,7 @@ export default function AdminComplaints() {
           Array.isArray(rawData) ? rawData : rawData?.complaints ?? [];
         const normalized = complaintsArray.map((item: any) => ({
           id: item.id?.toString() || "",
+          displayId: formatComplaintId(item.id?.toString() || ""),
           passenger:
             item.passenger ||
             (item.user?.firstName && item.user?.lastName
@@ -152,25 +162,28 @@ export default function AdminComplaints() {
   });
 
   return (
-    <div className="min-h-screen p-8 ">
+    <div className="min-h-screen bg-[#f5f7fa] p-6">
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-4 text-red-700">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
           {error}
         </div>
       )}
 
-      {/* STATS (FIXED ORIGINAL LAYOUT) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
         {stats.map((stat, index) => (
           <div
             key={index}
-            className="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4"
+            className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
           >
-            <div className="text-3xl">{stat.icon}</div>
+            <div className={`flex h-14 w-14 items-center justify-center rounded-xl ${stat.bg} shrink-0`}>
+              {stat.icon}
+            </div>
 
             <div>
-              <p className="text-xl font-bold">{stat.value}</p>
-              <p className="text-gray-500 text-sm">
+              <p className={`text-3xl font-black tracking-tight ${stat.color}`}>
+                {stat.value}
+              </p>
+              <p className="text-sm font-semibold text-gray-400">
                 {stat.title}
               </p>
             </div>
@@ -178,20 +191,22 @@ export default function AdminComplaints() {
         ))}
       </div>
 
-      {/* SEARCH + FILTER */}
-      <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-col md:flex-row gap-4">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          type="text"
-          placeholder="Search complaints..."
-          className="w-full md:w-1/2 px-4 py-2 rounded-xl border outline-none"
-        />
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2 rounded-lg border border-[#828282]/40 bg-white px-3 py-2 shadow-sm w-full md:w-80">
+          <IoSearch className="h-4 w-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            type="text"
+            placeholder="Search complaints..."
+            className="flex-1 bg-transparent text-sm outline-none text-black"
+          />
+        </div>
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border rounded-xl"
+          className="h-10 cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
         >
           <option value="All">All Status</option>
           <option value="Pending">Pending</option>
@@ -201,7 +216,7 @@ export default function AdminComplaints() {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-4 py-2 border rounded-xl"
+          className="h-10 cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
         >
           <option value="All">All Category</option>
           <option value="Punctuality">Punctuality</option>
@@ -210,10 +225,8 @@ export default function AdminComplaints() {
         </select>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        {/* HEADER */}
-        <div className="grid grid-cols-8 px-4 py-3 border-b text-gray-500 text-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
           <div>ID</div>
           <div>Passenger</div>
           <div>Category</div>
@@ -221,55 +234,53 @@ export default function AdminComplaints() {
           <div>Message</div>
           <div>Date</div>
           <div>Status</div>
-          <div>Action</div>
+          <div className="text-center">Actions</div>
         </div>
 
-        {/* ROWS */}
         <div>
           {isLoading ? (
-            <div className="p-6 text-center text-gray-500">Loading complaints...</div>
+            <div className="p-8 text-center text-sm font-semibold text-gray-500">Loading complaints...</div>
           ) : (
             filteredComplaints.map((item) => {
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-8 px-4 py-3 border-b hover:bg-gray-50 items-center"
+                  className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] items-center border-b px-5 py-3.5 text-sm transition-colors hover:bg-blue-50/30"
                 >
-                  <div>{item.id}</div>
-                  <div>{item.passenger}</div>
-                  <div>{item.category}</div>
-                  <div>{item.bus}</div>
-                  <div className="truncate">{item.message}</div>
-                  <div>{item.date}</div>
+                  <div className="font-mono text-xs font-bold tracking-wider text-gray-400">{item.displayId ?? item.id}</div>
+                  <div className="min-w-0 font-semibold text-gray-800 truncate">{item.passenger}</div>
+                  <div className="text-gray-700">{item.category}</div>
+                  <div className="text-gray-700">{item.bus}</div>
+                  <div className="truncate text-gray-700">{item.message}</div>
+                  <div className="font-mono text-xs text-gray-500">{item.date}</div>
 
-                  {/* STATUS */}
                   <div>
                     <span
-                      className={`px-3 py-1 text-xs rounded-lg font-semibold ${
+                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
                         item.status === "Resolved"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-yellow-100 text-yellow-700"
+                          ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                          : "border-amber-300 bg-amber-100 text-amber-700"
                       }`}
                     >
                       {item.status}
                     </span>
                   </div>
 
-                  {/* ACTIONS */}
-                  <div className="flex gap-2">
+                  <div className="flex items-center justify-center gap-2">
                     <button
                       onClick={() => setSelectedComplaint(item)}
-                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm transition hover:bg-blue-100"
+                      title="View complaint"
                     >
-                      View
+                      <IoEye className="h-4 w-4" />
                     </button>
 
                     <button
                       onClick={() => toggleStatus(item.id)}
-                      className={`px-2 py-1 text-xs rounded text-white ${
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition ${
                         item.status === "Pending"
-                          ? "bg-green-500"
-                          : "bg-yellow-500"
+                          ? "bg-emerald-500 hover:bg-emerald-600"
+                          : "bg-amber-500 hover:bg-amber-600"
                       }`}
                     >
                       {item.status === "Pending"
@@ -286,25 +297,25 @@ export default function AdminComplaints() {
 
       {/* MODAL */}
       {selectedComplaint && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-xl w-[400px]">
-            <h2 className="text-lg font-bold mb-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+          <div className="w-100 rounded-xl bg-white p-6 shadow-lg">
+            <h2 className="mb-4 text-lg font-bold">
               Complaint Details
             </h2>
 
-            <p>
-              <b>ID:</b> {selectedComplaint.id}
+            <p className="mb-1">
+              <b>ID:</b> {selectedComplaint.displayId ?? selectedComplaint.id}
             </p>
-            <p>
+            <p className="mb-1">
               <b>Passenger:</b> {selectedComplaint.passenger}
             </p>
-            <p>
+            <p className="mb-1">
               <b>Category:</b> {selectedComplaint.category}
             </p>
-            <p>
+            <p className="mb-1">
               <b>Bus:</b> {selectedComplaint.bus}
             </p>
-            <p>
+            <p className="mb-1">
               <b>Date:</b> {selectedComplaint.date}
             </p>
 
@@ -318,7 +329,7 @@ export default function AdminComplaints() {
             <div className="mt-4 text-right">
               <button
                 onClick={() => setSelectedComplaint(null)}
-                className="px-4 py-2 bg-gray-200 rounded-lg"
+                className="rounded-lg bg-gray-200 px-4 py-2"
               >
                 Close
               </button>

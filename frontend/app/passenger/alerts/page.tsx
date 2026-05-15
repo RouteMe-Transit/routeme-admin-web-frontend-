@@ -27,6 +27,7 @@ type BackendAlert = {
 
 type PassengerFeedAlert = {
     id: string;
+    displayId?: string;
     type: AlertTypeValue;
     title: string;
     description: string;
@@ -88,6 +89,15 @@ function formatAlertTime(alert: BackendAlert): string {
     }
 }
 
+function formatAltId(rawId: unknown, prefix = "ALT", width = 4): string {
+    if (rawId === null || rawId === undefined) return `${prefix}${"0".repeat(width)}`;
+    const s = String(rawId).trim();
+    const m = s.match(/(\d+)$/);
+    const digits = m ? m[1] : s.replace(/\D/g, "");
+    if (digits) return `${prefix}${digits.padStart(width, "0")}`;
+    return s;
+}
+
 function extractAlertList(payload: unknown): BackendAlert[] {
     if (Array.isArray(payload)) {
         return payload as BackendAlert[];
@@ -122,8 +132,11 @@ function mapBackendAlert(alert: BackendAlert): PassengerFeedAlert {
     const alertId = alert.id ?? alert._id ?? alert.alertId ?? `${alert.title ?? "alert"}-${alert.createdAt ?? alert.sentAt ?? Date.now()}`;
     const isUnread = alert.isUnread ?? (typeof alert.isRead === "boolean" ? !alert.isRead : !alert.readAt);
 
+    const displayId = formatAltId(alertId);
+
     return {
         id: String(alertId),
+        displayId,
         type: normalizeAlertType(alert.alertType ?? alert.type),
         title: alert.title?.trim() || "Untitled alert",
         description: alert.description?.trim() || "No description available.",
@@ -259,7 +272,10 @@ export default function PassengerAlertsPage() {
                                             New
                                         </span>
                                     )}
-                                    <span className="text-xs text-gray-500">{alert.time}</span>
+                                    <div className="flex items-center gap-2">
+                                        {alert.displayId && <span className="text-xs text-gray-500">{alert.displayId}</span>}
+                                        <span className="text-xs text-gray-500">{alert.time}</span>
+                                    </div>
                                 </div>
                                 <h3 className="text-base font-bold text-gray-800">{alert.title}</h3>
                                 <p className="mt-1 text-sm text-gray-700">{alert.description}</p>
