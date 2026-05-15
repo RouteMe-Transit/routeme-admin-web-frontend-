@@ -82,21 +82,6 @@ const readString = (value: unknown): string | undefined => {
   return undefined;
 };
 
-const readFirstString = (source: Record<string, unknown> | undefined, keys: string[]): string | undefined => {
-  if (!source) {
-    return undefined;
-  }
-
-  for (const key of keys) {
-    const value = readString(source[key]);
-    if (value) {
-      return value;
-    }
-  }
-
-  return undefined;
-};
-
 const normalizeCreatedBy = (item: BackendAlert): CreatedBy | undefined => {
   const source = item.createdByInfo ?? (typeof item.createdBy === "object" ? item.createdBy : undefined);
   const role = readString(source?.role) ?? "";
@@ -152,6 +137,28 @@ const formatSriLankanDateTime = (input?: string) => {
     return String(input);
   }
 };
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function highlightText(text?: string, query?: string) {
+  if (!text) return text ?? "";
+  if (!query) return text;
+
+  const q = query.trim();
+  if (q === "") return text;
+
+  const escaped = escapeRegExp(q);
+  const regex = new RegExp(`(${escaped})`, "ig");
+  const parts = text.split(regex);
+
+  return parts.map((part, idx) => {
+    return part.toLowerCase() === q.toLowerCase() ? (
+      <mark key={idx} className="bg-yellow-200 rounded px-0.5">{part}</mark>
+    ) : (
+      part
+    );
+  });
+}
 
 type AlertHistoryItem = {
   id: string | number;
@@ -242,7 +249,7 @@ function AlertHistoryViewModal({ item, onClose }: AlertHistoryViewModalProps) {
             <strong>Target:</strong> {item.targetAudience}
           </p>
           <p>
-            <strong>Affected Route:</strong> {item.affectedRoute}
+            <strong>Affected Route:</strong> {item.affectedRoute || "—"}
           </p>
           {item.affectedBus && (
             <p>
@@ -400,49 +407,6 @@ function AlertScheduleModal({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-type AlertHistoryItemCardProps = {
-  item: AlertHistoryItem;
-  onView: (item: AlertHistoryItem) => void;
-};
-
-function AlertHistoryItemCard({ item, onView }: AlertHistoryItemCardProps) {
-  return (
-    <div className={`rounded-md border-l-4 p-3 shadow-sm ${ALERT_STYLE_MAP[item.type].cardClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-800">{item.title}</p>
-          <p className="text-xs text-gray-500">{ALERT_LABEL_MAP[item.type]}</p>
-          <p className="text-xs text-gray-400">ID: {item.displayId ?? item.id}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onView(item)}
-            className="alert-history-view-button flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition hover:bg-blue-100"
-            aria-label="View full alert"
-            title="View full alert"
-          >
-            <IoEye size={16} />
-          </button>
-          <span
-            className={`shrink-0 rounded-full border px-2 py-1 text-xs font-semibold ${
-              item.status === "published"
-                ? "border-emerald-300 bg-emerald-100 text-emerald-700"
-                : "border-amber-300 bg-amber-100 text-amber-700"
-            }`}
-          >
-            {item.status}
-          </span>
-        </div>
-      </div>
-      <p className="mt-2 text-xs text-gray-600">Target: {item.targetAudience}</p>
-      <p className="mt-1 text-xs text-gray-600">Affected Route: {item.affectedRoute}</p>
-      {item.scheduledAt && <p className="mt-1 text-xs text-gray-600">Scheduled for: {item.scheduledAt}</p>}
-      <p className="mt-1 text-xs text-gray-500">{formatSriLankanDateTime(item.timestamp)}</p>
     </div>
   );
 }
@@ -619,9 +583,17 @@ export default function AdminAlertsPage() {
   const uniqueRoutes = Array.from(new Set(alertHistory.map((item) => item.affectedRoute).filter(Boolean)));
 
   const filteredAlerts = alertHistory.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.affectedRoute.toLowerCase().includes(searchTerm.toLowerCase());
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const rawId = String(item.id).toLowerCase();
+    const displayId = String(item.displayId ?? item.id).toLowerCase();
+    const matchesSearch =
+      rawId.includes(normalizedSearch) ||
+      displayId.includes(normalizedSearch) ||
+      item.title.toLowerCase().includes(normalizedSearch) ||
+      item.description.toLowerCase().includes(normalizedSearch) ||
+      item.affectedRoute.toLowerCase().includes(normalizedSearch) ||
+      item.affectedBus?.toLowerCase().includes(normalizedSearch) ||
+      item.targetAudience.toLowerCase().includes(normalizedSearch);
     const matchesCreatorFilter = filterType === "all" || item.createdBy?.role === filterType;
     const matchesTypeFilter = filterAlertType === "" || item.type === filterAlertType;
     const matchesRouteFilter = filterAffectedRoute === "" || item.affectedRoute === filterAffectedRoute;
@@ -629,7 +601,6 @@ export default function AdminAlertsPage() {
     return matchesSearch && matchesCreatorFilter && matchesTypeFilter && matchesRouteFilter && matchesStatusFilter;
   });
 
-  const filteredAlertCount = filteredAlerts.length;
   const safePage = Math.min(page, totalPages);
   const availableRouteIds = new Set(routes.map((route) => String(route.id)));
   const createAlertFormSchema = buildCreateAlertFormSchema(availableRouteIds);
@@ -648,8 +619,6 @@ export default function AdminAlertsPage() {
 
   const previewStyle = ALERT_STYLE_MAP[alertType];
   const selectedAlertLabel = ALERT_LABEL_MAP[alertType];
-  const getTargetAudience = () => (isPublicAlert ? "All Passengers" : targetRoute);
-
   const formatRouteLabel = (route: { routeName: string; from?: string; to?: string; routeNumber?: string }) => {
     if (route.routeName.trim() !== "") {
       return route.routeName;
@@ -675,24 +644,43 @@ export default function AdminAlertsPage() {
     setCreateFormErrors({});
   };
 
-  const fetchAlertHistory = useCallback(async () => {
-    try {
-      setHistoryLoading(true);
-      const response = await api.get(`/alerts/history/all?page=${page}&limit=${limit}`, getAuthConfig());
-      const payload = response.data?.data ?? response.data;
-      const alerts = extractAlertList(payload?.alerts ?? payload).map(mapBackendAlert);
-      setAlertHistory(alerts);
-      setTotalPages(payload?.totalPages ?? 1);
-      setTotalAlerts(payload?.total ?? alerts.length);
-    } catch {
-      toast.error("Failed to load alert history");
-      setAlertHistory([]);
-      setTotalPages(1);
-      setTotalAlerts(0);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, [page, limit]);
+  const fetchAlertHistory = useCallback(
+    async (opts?: { search?: string; signal?: AbortSignal }) => {
+      try {
+        setHistoryLoading(true);
+
+        const params: Record<string, unknown> = { page, limit };
+        if (opts?.search) params.search = opts.search;
+        if (filterStatus) params.status = filterStatus;
+        if (filterType === "admin") params.createdBy = "admin";
+        else if (filterType === "bus") params.createdBy = "bus";
+
+        const response = await api.get(`/alerts/history/all`, {
+          ...getAuthConfig(),
+          params,
+          signal: opts?.signal,
+        } as any);
+
+        const payload = response.data?.data ?? response.data;
+        const alerts = extractAlertList(payload?.alerts ?? payload).map(mapBackendAlert);
+        setAlertHistory(alerts);
+        setTotalPages(payload?.totalPages ?? 1);
+        setTotalAlerts(payload?.total ?? alerts.length);
+      } catch (error) {
+        // Ignore abort errors
+        const isAbort = (error as any)?.name === "CanceledError" || (error as any)?.message === "canceled";
+        if (!isAbort) {
+          toast.error("Failed to load alert history");
+          setAlertHistory([]);
+          setTotalPages(1);
+          setTotalAlerts(0);
+        }
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [page, limit, filterStatus, filterType]
+  );
 
   const validateCreateAlertForm = () => {
     const parsed = createAlertFormSchema.safeParse({
@@ -843,9 +831,26 @@ export default function AdminAlertsPage() {
       }
     };
 
-    fetchAlertHistory();
     loadRoutes();
   }, [fetchAlertHistory]);
+
+  // Debounced search + cancel previous requests when typing
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetchAlertHistory({ search: searchTerm.trim() || undefined, signal: controller.signal });
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchTerm, page, limit, filterStatus, filterType, fetchAlertHistory]);
+
+  // Reset to first page when user starts a new search
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
 
   return (
     <>
@@ -932,11 +937,11 @@ export default function AdminAlertsPage() {
               ) : filteredAlerts.length > 0 ? (
                 filteredAlerts.map((item) => (
                   <div key={item.id} className="grid grid-cols-[90px_1.1fr_1fr_1fr_1.4fr_1.1fr_1fr_110px_70px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition">
-                    <div className="font-semibold text-[#122843] whitespace-nowrap">{item.displayId ?? item.id}</div>
+                    <div className="font-semibold text-[#122843] whitespace-nowrap">{highlightText(String(item.displayId ?? item.id), searchTerm)}</div>
                     <div className="font-medium text-gray-700">{ALERT_LABEL_MAP[item.type]}</div>
-                    <div className="text-gray-600">{item.affectedBus || "—"}</div>
-                    <div className="text-gray-600">{item.affectedRoute || "—"}</div>
-                    <div className="text-gray-600">{item.title}</div>
+                    <div className="text-gray-600">{item.affectedBus ? highlightText(item.affectedBus, searchTerm) : "—"}</div>
+                    <div className="text-gray-600">{item.affectedRoute ? highlightText(item.affectedRoute, searchTerm) : "—"}</div>
+                    <div className="text-gray-600">{highlightText(item.title, searchTerm)}</div>
                     <div className="text-gray-600">{item.targetAudience}</div>
                     <div className="text-gray-600">{item.createdBy?.role || formatCreatedBySummary(item.createdBy)}</div>
                     <div>
