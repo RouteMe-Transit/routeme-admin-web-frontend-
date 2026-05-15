@@ -15,6 +15,7 @@ import { FaEye } from "react-icons/fa6";
 import { FaXmark } from "react-icons/fa6";
 import { IoEye } from "react-icons/io5";
 import api from "@/app/services/api";
+import { formatSriLankanTime, SRI_LANKA_TIMEZONE } from "@/utils/sriLankanTime";
 
 const ALERT_TYPE_VALUE_SET = new Set<string>(ALERT_TYPE_OPTIONS.map((option) => option.value));
 
@@ -37,10 +38,17 @@ type BackendAlert = {
   timestamp?: string;
   scheduledAt?: string;
   sentAt?: string;
-  createdBy?: {
-    type?: string;
+  createdBy?: number | {
+    role?: string;
     id?: string | number;
     name?: string;
+    displayName?: string;
+  };
+  createdByInfo?: {
+    role?: string;
+    id?: string | number;
+    name?: string;
+    displayName?: string;
   };
 };
 
@@ -55,9 +63,94 @@ type BackendRoute = {
 type AlertHistoryStatus = "published" | "scheduled";
 
 type CreatedBy = {
-  type: "admin" | "bus" | string;
+  role: "admin" | "bus" | string;
   id: string | number;
   name: string;
+  displayName?: string;
+};
+
+const readString = (value: unknown): string | undefined => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed !== "" ? trimmed : undefined;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return undefined;
+};
+
+const readFirstString = (source: Record<string, unknown> | undefined, keys: string[]): string | undefined => {
+  if (!source) {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    const value = readString(source[key]);
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+};
+
+const normalizeCreatedBy = (item: BackendAlert): CreatedBy | undefined => {
+  const source = item.createdByInfo ?? (typeof item.createdBy === "object" ? item.createdBy : undefined);
+  const role = readString(source?.role) ?? "";
+  const id = readString(source?.id);
+  const displayName = readString(source?.displayName) ?? readString(source?.name);
+  const name = displayName ?? readString(source?.name);
+
+  if (role || id || displayName || name) {
+    return {
+      role: role || "—",
+      id: id ?? "—",
+      name: name ?? displayName ?? "—",
+      displayName: displayName ?? name ?? "—",
+    };
+  }
+
+  return undefined;
+};
+
+const mergeAlertDetail = (item: AlertHistoryItem, detail: BackendAlert): BackendAlert => {
+  const merged: BackendAlert = {
+    ...item,
+    ...detail,
+  };
+
+  if (!merged.createdBy && item.createdBy) {
+    merged.createdBy = item.createdBy;
+  }
+
+  return merged;
+};
+
+const formatCreatedBySummary = (createdBy?: CreatedBy) => {
+  if (!createdBy) {
+    return "—";
+  }
+
+  const parts = [createdBy.role, createdBy.displayName ?? createdBy.name, createdBy.id]
+    .map((part) => String(part).trim())
+    .filter((part) => part !== "" && part !== "—");
+
+  return parts.length > 0 ? parts.join(" • ") : "—";
+};
+
+const formatSriLankanDateTime = (input?: string) => {
+  if (!input) return "—";
+  try {
+    const date = new Date(input);
+    const datePart = new Intl.DateTimeFormat("en-GB", { year: "numeric", month: "short", day: "numeric", timeZone: SRI_LANKA_TIMEZONE }).format(date);
+    const timePart = formatSriLankanTime(date);
+    return `${datePart} ${timePart}`;
+  } catch {
+    return String(input);
+  }
 };
 
 type AlertHistoryItem = {
@@ -158,16 +251,16 @@ function AlertHistoryViewModal({ item, onClose }: AlertHistoryViewModalProps) {
           )}
           {item.scheduledAt && (
             <p>
-              <strong>Scheduled for:</strong> {item.scheduledAt}
+              <strong>Scheduled for:</strong> {formatSriLankanDateTime(item.scheduledAt)}
             </p>
           )}
           {item.sentAt && (
             <p>
-              <strong>Sent At:</strong> {item.sentAt}
+              <strong>Sent At:</strong> {formatSriLankanDateTime(item.sentAt)}
             </p>
           )}
           <p>
-            <strong>Created:</strong> {item.timestamp}
+            <strong>Created:</strong> {formatSriLankanDateTime(item.timestamp)}
           </p>
           {item.createdBy && (
             <div>
@@ -176,13 +269,13 @@ function AlertHistoryViewModal({ item, onClose }: AlertHistoryViewModalProps) {
               </p>
               <div className="ml-4 text-sm text-gray-700">
                 <p>
-                  <strong>Type:</strong> {item.createdBy.type}
+                  <strong>Role:</strong> {item.createdBy.role || "—"}
                 </p>
                 <p>
-                  <strong>ID:</strong> {item.createdBy.id}
+                  <strong>ID:</strong> {item.createdBy.id || "—"}
                 </p>
                 <p>
-                  <strong>Name:</strong> {item.createdBy.name}
+                  <strong>Name:</strong> {item.createdBy.displayName || item.createdBy.name || "—"}
                 </p>
               </div>
             </div>
@@ -349,7 +442,7 @@ function AlertHistoryItemCard({ item, onView }: AlertHistoryItemCardProps) {
       <p className="mt-2 text-xs text-gray-600">Target: {item.targetAudience}</p>
       <p className="mt-1 text-xs text-gray-600">Affected Route: {item.affectedRoute}</p>
       {item.scheduledAt && <p className="mt-1 text-xs text-gray-600">Scheduled for: {item.scheduledAt}</p>}
-      <p className="mt-1 text-xs text-gray-500">{item.timestamp}</p>
+      <p className="mt-1 text-xs text-gray-500">{formatSriLankanDateTime(item.timestamp)}</p>
     </div>
   );
 }
@@ -475,13 +568,7 @@ const mapBackendAlert = (item: BackendAlert): AlertHistoryItem => {
     return s;
   }
   const displayId = formatAltId(id);
-  const createdBy = item.createdBy
-    ? {
-        type: item.createdBy.type ?? "admin",
-        id: item.createdBy.id ?? "",
-        name: item.createdBy.name ?? "Unknown",
-      }
-    : undefined;
+  const createdBy = normalizeCreatedBy(item);
 
   return {
     id,
@@ -535,7 +622,7 @@ export default function AdminAlertsPage() {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.affectedRoute.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCreatorFilter = filterType === "all" || item.createdBy?.type === filterType;
+    const matchesCreatorFilter = filterType === "all" || item.createdBy?.role === filterType;
     const matchesTypeFilter = filterAlertType === "" || item.type === filterAlertType;
     const matchesRouteFilter = filterAffectedRoute === "" || item.affectedRoute === filterAffectedRoute;
     const matchesStatusFilter = filterStatus === "" || item.status === filterStatus;
@@ -719,7 +806,7 @@ export default function AdminAlertsPage() {
       const data = detailsPayload?.data as unknown;
 
       if (data && !Array.isArray(data) && typeof data === "object") {
-        setSelectedHistoryAlert(mapBackendAlert(data as BackendAlert));
+        setSelectedHistoryAlert(mapBackendAlert(mergeAlertDetail(item, data as BackendAlert)));
       } else {
         setSelectedHistoryAlert(item);
       }
@@ -851,7 +938,7 @@ export default function AdminAlertsPage() {
                     <div className="text-gray-600">{item.affectedRoute || "—"}</div>
                     <div className="text-gray-600">{item.title}</div>
                     <div className="text-gray-600">{item.targetAudience}</div>
-                    <div className="text-gray-600 capitalize">{item.createdBy?.type || "—"}</div>
+                    <div className="text-gray-600">{item.createdBy?.role || formatCreatedBySummary(item.createdBy)}</div>
                     <div>
                       <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${item.status === "published" ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"}`}>
                         {item.status === "published" ? "Published" : "Scheduled"}
