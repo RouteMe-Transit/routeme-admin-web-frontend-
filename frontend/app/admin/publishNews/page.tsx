@@ -43,8 +43,7 @@ const CATEGORY_SOLID: Record<string, { bg: string; text: string }> = {
   "General":        { bg: "#6b7280", text: "#fff" },
   "Emergency":      { bg: "#ef4444", text: "#fff" },
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 // ── Zod Schema ────────────────────────────────────────────────────────────────
 const publishNewsSchema = z.object({
