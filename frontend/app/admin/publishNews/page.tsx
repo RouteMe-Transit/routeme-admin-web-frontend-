@@ -43,7 +43,10 @@ const CATEGORY_SOLID: Record<string, { bg: string; text: string }> = {
   "General":        { bg: "#6b7280", text: "#fff" },
   "Emergency":      { bg: "#ef4444", text: "#fff" },
 };
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
+// ── FIX: Strip trailing /api/v1 from env var to avoid doubled path ────────────
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1")
+  .replace(/\/api\/v1$/, "");
 
 // ── Zod Schema ────────────────────────────────────────────────────────────────
 const publishNewsSchema = z.object({
