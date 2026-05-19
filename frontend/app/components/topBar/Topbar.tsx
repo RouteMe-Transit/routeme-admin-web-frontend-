@@ -53,15 +53,15 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
   }, [busInfo]);
 
   return (
-    <div className={`${topbarThemeClass} w-full h-16 bg-white shadow flex items-center justify-between px-6 sticky top-0 z-10`}>
-      <div className="flex items-center gap-4">
+    <div className={`${topbarThemeClass} sticky top-0 z-10 flex h-auto min-h-16 w-full shrink-0 flex-col justify-between gap-3 overflow-x-hidden bg-white px-4 py-3 shadow sm:h-16 sm:flex-row sm:items-center sm:px-6`}>
+      <div className="flex min-w-0 items-center gap-3 pl-12 sm:gap-4 sm:pl-0">
         {icon}
-        <h1 className="text-2xl font-bold">{title}</h1>
+        <h1 className="min-w-0 wrap-break-word text-xl font-bold sm:text-2xl">{title}</h1>
       </div>
 
       {isBusRoute ? (
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 whitespace-nowrap">
             <FaCircle
               className={`${gpsEnabled ? "text-green-500" : "text-red-500"} mr-2 ${gpsEnabled ? "animate-pulse" : ""}`}
             />
@@ -93,7 +93,7 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
             </div>
           )}
 
-          <div className="bus-topbar-meta rounded-full border border-[#94A0AE] bg-[#EEEEEE] px-3 py-2 text-sm text-slate-700 flex items-center gap-1 w-[170px] h-14">
+          <div className="bus-topbar-meta flex h-14 w-42.5 items-center gap-1 rounded-full border border-[#94A0AE] bg-[#EEEEEE] px-3 py-2 text-sm text-slate-700">
             <img src="/icons/bus.png" alt="bus" className=" w-6 h-6 mr-2" />
             <div>
                 <p className="font-bold">{busInfo?.busId ?? ""}</p>
@@ -103,13 +103,13 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
         </div>
       ) : (
         !busInfo && isPassengerLiveTracking ? (
-          <div className="flex gap-3 items-center">
-            <div className="flex items-center gap-2 mr-1">
+          <div className="ml-auto flex max-w-full flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 whitespace-nowrap">
               <FaCircle className="text-green-500 animate-pulse text-xs" />
               <span className="text-green-600 font-semibold">Live</span>
             </div>
 
-            <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white text-slate-700">
+            <select className="max-w-[calc(100vw-150px)] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 whitespace-nowrap sm:max-w-none sm:px-4">
               <option>All Routes</option>
               <option>115</option>
               <option>120</option>
@@ -119,36 +119,12 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="bg-[#4caf8a] text-white px-4 py-2 rounded-lg hover:bg-[#3f9c79] text-sm font-semibold"
+              className="hidden bg-[#4caf8a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3f9c79] sm:inline-flex rounded-lg"
             >
               Refresh
             </button>
           </div>
         ) : null
-      )}
-
-      {!busInfo && isPassengerLiveTracking && (
-        <div className="flex gap-3 items-center">
-          <div className="flex items-center gap-2 mr-1">
-            <FaCircle className="text-green-500 animate-pulse text-xs" />
-            <span className="text-green-600 font-semibold">Live</span>
-          </div>
-
-          <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white text-slate-700">
-            <option>All Routes</option>
-            <option>115</option>
-            <option>120</option>
-            <option>122</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="bg-[#4caf8a] text-white px-4 py-2 rounded-lg hover:bg-[#3f9c79] text-sm font-semibold"
-          >
-            Refresh
-          </button>
-        </div>
       )}
     </div>
   );

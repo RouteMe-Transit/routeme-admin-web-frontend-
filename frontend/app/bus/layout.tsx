@@ -120,11 +120,11 @@ function BusLayoutContent({ children }: BusLayoutProps) {
     }, []);
 
     return (
-        <div data-theme={theme} className="bus-theme min-h-screen w-full bg-primary text-accent flex">
+        <div data-theme={theme} className="bus-theme h-dvh w-full overflow-hidden bg-primary text-accent flex">
             <Sidebar role="bus" gpsEnabled={gpsEnabled} onGpsToggle={setGpsEnabled} />
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex min-h-0 flex-col overflow-hidden">
                 {showTopBar && <TopBar title={config.title} icon={config.icon} busInfo={busInfo} gpsEnabled={gpsEnabled} />}
-                <main className="flex-1 ">{children}</main>
+                <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">{children}</main>
             </div>
         </div>
     );

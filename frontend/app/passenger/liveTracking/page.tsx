@@ -88,31 +88,31 @@ const buses: Bus[] = [
 
 export default function LiveTrackingPage() {
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
+    <div className="min-h-dvh overflow-x-hidden bg-gray-100 p-4 sm:p-6">
       {/* Main Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Map Section */}
-        <div className="lg:col-span-3 bg-white rounded-2xl shadow p-4">
+        <div className="relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl bg-white p-4 shadow lg:col-span-3">
           <LiveTrackingMap buses={buses} />
         </div>
 
         {/* Sidebar Bus List */}
-        <div className="bg-white rounded-2xl shadow p-4">
+        <div className="relative min-w-0 w-full max-w-full rounded-2xl bg-white p-4 shadow">
           <h2 className="text-lg font-semibold mb-4">Buses Near You</h2>
 
           <div className="space-y-3 max-h-125 overflow-y-auto">
             {buses.map((bus) => (
               <div
                 key={bus.id}
-                className="border rounded-lg p-3 hover:shadow-sm transition"
+                className="min-w-0 w-full rounded-lg border p-3 transition hover:shadow-sm"
               >
-                <h3 className="font-semibold text-sm">{bus.id}</h3>
+                <h3 className="wrap-break-word text-sm font-semibold">{bus.id}</h3>
 
-                <p className="text-sm text-gray-600">
+                <p className="wrap-break-word text-sm text-gray-600">
                   {bus.route} {bus.from} → {bus.to}
                 </p>
 
-                <p className="text-xs text-gray-500">
+                <p className="wrap-break-word text-xs text-gray-500">
                   Heading: {bus.heading}
                 </p>
 

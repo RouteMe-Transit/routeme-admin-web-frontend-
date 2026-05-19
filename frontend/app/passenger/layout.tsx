@@ -39,12 +39,12 @@ function PassengerLayoutContent({ children }: PassengerLayoutProps) {
 	return (
 		<div
 			data-theme={theme}
-			className="passenger-theme min-h-screen w-full bg-primary text-accent flex"
+			className="passenger-theme flex h-dvh w-full overflow-hidden bg-primary text-accent"
 		>
 			<Sidebar role="passenger" />
-			<div className="flex-1 flex flex-col">
+			<div className="flex-1 min-w-0 flex flex-col overflow-hidden">
 				{showTopBar && <TopBar title={config.title} icon={config.icon} />}
-				<main className="flex-1">{children}</main>
+				<main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">{children}</main>
 			</div>
 		</div>
 	);

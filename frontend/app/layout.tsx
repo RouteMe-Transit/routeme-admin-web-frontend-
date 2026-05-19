@@ -19,7 +19,7 @@ export default function RootLayout({
       lang="en"
       className="h-full antialiased"
     >
-      <body suppressHydrationWarning className="min-h-full flex flex-col overflow-x-auto bg-primary">
+      <body suppressHydrationWarning className="min-h-full flex flex-col overflow-x-hidden bg-primary">
       <Toaster
         position="top-right"
         toastOptions={{
@@ -48,7 +48,7 @@ export default function RootLayout({
           },
         }}
       />
-      <div className="w-full min-w-340 flex-1">{children}</div>
+      <div className="w-full min-w-0 flex-1">{children}</div>
       </body>
     </html>
   );
