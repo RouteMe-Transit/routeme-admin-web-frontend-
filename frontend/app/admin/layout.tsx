@@ -36,12 +36,12 @@ function AdminLayoutContent({ children }: AdminLayoutProps) {
 	const config = configMap[pathname] ?? { title: "Admin", icon: null };
 
 	return (
-		<div data-theme={theme} className="admin-theme min-h-screen w-full bg-primary text-accent">
-			<div className="flex min-h-screen">
+		<div data-theme={theme} className="admin-theme h-dvh w-full overflow-hidden bg-primary text-accent">
+			<div className="flex h-full min-h-0">
 				<Sidebar role="admin" />
-				<div className="flex-1 flex flex-col">
+				<div className="flex-1 flex min-h-0 flex-col overflow-hidden">
 					{showTopBar && <TopBar title={config.title} icon={config.icon} />}
-					<main className="flex-1 ">{children}</main>
+					<main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">{children}</main>
 				</div>
 			</div>
 		</div>

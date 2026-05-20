@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import api from "@/app/services/api";
-import { ALERT_LABEL_MAP, ALERT_STYLE_MAP, getSeenPassengerAlertIds, markPassengerAlertsAsSeen } from "@/config/passengerAlerts";
-import { formatSriLankanTime } from "@/utils/sriLankanTime";
-import type { AlertTypeValue } from "@/config/alertTypes";
+import { FaXmark } from "react-icons/fa6";
+import api from "../../services/api";
+import { ALERT_LABEL_MAP, ALERT_STYLE_MAP } from "../../../config/alertTypes";
+import { getSeenPassengerAlertIds, markPassengerAlertsAsSeen } from "../../../config/passengerAlerts";
+import { formatSriLankanTime } from "../../../utils/sriLankanTime";
+import type { AlertTypeValue } from "../../../config/alertTypes";
 
 type BackendAlert = {
     id?: string | number;
@@ -34,6 +36,16 @@ type PassengerFeedAlert = {
     affectedRoute: string;
     time: string;
     isUnread: boolean;
+};
+
+type PassengerAlertDetail = {
+    id?: string | number;
+    title?: string;
+    alertType?: string;
+    affectedBus?: string;
+    affectedRoute?: string;
+    sentAt?: string;
+    description?: string;
 };
 
 const DEFAULT_FEED_LIMIT = 50;
@@ -146,10 +158,39 @@ function mapBackendAlert(alert: BackendAlert): PassengerFeedAlert {
     };
 }
 
+function extractPassengerAlertDetail(payload: unknown): PassengerAlertDetail | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    const record = payload as Record<string, unknown>;
+
+    if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
+        return record.data as PassengerAlertDetail;
+    }
+
+    return record as PassengerAlertDetail;
+}
+
+function formatDetailTime(value?: string): string {
+    if (!value) {
+        return "Not provided";
+    }
+
+    try {
+        return formatSriLankanTime(value);
+    } catch {
+        return value;
+    }
+}
+
 export default function PassengerAlertsPage() {
     const [alerts, setAlerts] = useState<PassengerFeedAlert[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [selectedAlert, setSelectedAlert] = useState<PassengerAlertDetail | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState("");
 
     const loadAlerts = useCallback(async () => {
         try {
@@ -232,7 +273,62 @@ export default function PassengerAlertsPage() {
         void loadAlerts();
     }, [loadAlerts]);
 
+    const openAlertDetail = useCallback(async (id: string) => {
+        setSelectedAlert(null);
+        setDetailError("");
+        setDetailLoading(true);
+                const modalBorderClass = `${detailStyle.fullBorderClass ?? "border-slate-500"} border-4`;
+
+        try {
+            const response = await api.get(`/alerts/${id}`, getAuthConfig());
+            const detail = extractPassengerAlertDetail(response.data);
+
+            if (!detail) {
+                setDetailError("Alert details are not available.");
+                return;
+            }
+
+            setSelectedAlert(detail);
+        } catch (caughtError) {
+            const status = (caughtError as { response?: { status?: number } })?.response?.status;
+
+            if (status === 403) {
+                setDetailError("You are not allowed to view this alert.");
+            } else if (status === 404) {
+                setDetailError("Alert not found.");
+            } else {
+                setDetailError("Failed to load alert details.");
+                toast.error("Failed to load alert details");
+            }
+        } finally {
+            setDetailLoading(false);
+        }
+    }, []);
+
+    const closeAlertDetail = useCallback(() => {
+        setSelectedAlert(null);
+        setDetailLoading(false);
+        setDetailError("");
+    }, []);
+
     const unreadCount = alerts.filter((alert) => alert.isUnread).length;
+    const detailType = selectedAlert ? normalizeAlertType(selectedAlert.alertType) : "Other";
+    const detailLabel = ALERT_LABEL_MAP[detailType];
+    const detailStyle = ALERT_STYLE_MAP[detailType];
+    const detailFullBorderClass = (() => {
+        const s = String(detailStyle.cardClass ?? "");
+        const leftMatch = s.match(/border-l-([^\s]+)/);
+        const anyMatch = s.match(/border-([^\s]+)/);
+        const colorToken = leftMatch?.[1] ?? anyMatch?.[1] ?? null;
+        const bgToken = s.match(/bg-[^\s]+/)?.[0] ?? "bg-white";
+
+        if (colorToken) {
+            return `${bgToken} border-4 border-${colorToken}`;
+        }
+
+        // fallback to original class string
+        return s;
+    })();
 
     return (
         <section className="space-y-4 p-6">
@@ -262,7 +358,12 @@ export default function PassengerAlertsPage() {
                         const style = ALERT_STYLE_MAP[alert.type];
 
                         return (
-                            <div key={alert.id} className={`rounded-md border-l-4 p-4 shadow-sm ${style.cardClass}`}>
+                            <button
+                                key={alert.id}
+                                type="button"
+                                onClick={() => void openAlertDetail(alert.id)}
+                                className={`w-full h-40 rounded-md border-l-4 p-4 text-left shadow-sm transition hover:shadow-md overflow-hidden ${style.cardClass}`}
+                            >
                                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                                     <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${style.badgeClass}`}>
                                         {ALERT_LABEL_MAP[alert.type]}
@@ -273,18 +374,93 @@ export default function PassengerAlertsPage() {
                                         </span>
                                     )}
                                     <div className="flex items-center gap-2">
-                                        {alert.displayId && <span className="text-xs text-gray-500">{alert.displayId}</span>}
                                         <span className="text-xs text-gray-500">{alert.time}</span>
                                     </div>
                                 </div>
-                                <h3 className="text-base font-bold text-gray-800">{alert.title}</h3>
-                                <p className="mt-1 text-sm text-gray-700">{alert.description}</p>
+                                <h3 className="text-base font-bold text-gray-800 truncate">{alert.title}</h3>
+                                <div className="mt-1 pr-2">
+                                    <p className="text-sm text-gray-700 wrap-break-word">{prefixTruncateWords(alert.description, 8)}</p>
+                                </div>
                                 <p className="mt-2 text-xs font-medium text-gray-600">Affected Route: {alert.affectedRoute}</p>
-                            </div>
+                            </button>
                         );
                     })}
                 </div>
             )}
+
+            {(detailLoading || detailError || selectedAlert) && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+                    <div className={`relative w-full max-w-3xl max-h-[90vh] overflow-auto rounded-[28px] shadow-2xl ${detailFullBorderClass}`}>
+                        <div className="px-5 py-5 pr-14 sm:pr-16">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-3">
+                                    
+                                    <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${detailStyle.badgeClass}`}>
+                                                {detailLabel}
+                                            </span>
+                                    </div>
+                                    <h2 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                                        {detailLoading ? "Loading..." : selectedAlert?.title ?? "Alert details"}
+                                    </h2>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-5 sm:p-6">
+                            {detailLoading ? (
+                                <div className="rounded-2xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                                    Loading alert details...
+                                </div>
+                            ) : detailError ? (
+                                <div className="rounded-2xl bg-rose-50 px-4 py-10 text-center text-sm text-rose-700">
+                                    {detailError}
+                                </div>
+                            ) : selectedAlert ? (
+                                <div className="space-y-4">
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Affected Bus</p>
+                                            <p className="mt-2 text-sm font-medium text-slate-800 wrap-break-word">{selectedAlert.affectedBus ?? "Not provided"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Affected Route</p>
+                                            <p className="mt-2 text-sm font-medium text-slate-800 wrap-break-word">{selectedAlert.affectedRoute ?? "Not provided"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sent At</p>
+                                            <p className="mt-2 text-sm font-medium text-slate-800 wrap-break-word">{formatDetailTime(selectedAlert.sentAt)}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className={`rounded-2xl bg-white px-4 py-4 shadow-sm sm:px-5`}>
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Description</p>
+                                        <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-800 sm:text-[17px]">
+                                            {selectedAlert.description ?? "Not provided"}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeAlertDetail}
+                            className="fixed right-4 top-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow-sm transition hover:bg-white hover:text-rose-700 sm:absolute sm:right-6 sm:top-6"
+                            aria-label="Close alert details"
+                        >
+                            <FaXmark className="text-lg" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </section>
     );
+}
+
+function prefixTruncateWords(value: string | undefined, maxWords = 6) {
+    const s = String(value ?? "").trim();
+    if (!s) return "";
+    const words = s.split(/\s+/);
+    if (words.length <= maxWords) return s;
+    return `${words.slice(0, maxWords).join(" ")}...`;
 }

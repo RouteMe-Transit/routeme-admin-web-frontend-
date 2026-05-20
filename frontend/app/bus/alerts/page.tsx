@@ -413,7 +413,7 @@ export default function BusAlertsPage() {
 
     return (
         <section className="space-y-6 p-6">
-            <div className="grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 lg:grid-cols-3 ">
+            <div className="grid grid-cols-2 justify-items-center gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {BUS_ALERT_TYPES.map((type) => {
                     const label = ALERT_LABEL_MAP[type];
                     const iconSrc = ALERT_ICON_SRC_MAP[type];
@@ -432,7 +432,7 @@ export default function BusAlertsPage() {
                 })}
             </div>
 
-            <div className="bus-alert-panel rounded-2xl border border-gray-200 bg-white p-4 shadow-sm w-255 ml-8">
+            <div className="bus-alert-panel rounded-2xl border border-gray-200 bg-white p-4 shadow-sm w-full sm:w-255 sm:ml-8 max-w-full">
                 <h2 className="mb-2 text-lg font-bold text-[#828282]">Recent Alerts</h2>
                 <h3 className="text-sm text-gray-500">Only the most recent alerts are shown here.</h3>
 
@@ -445,17 +445,17 @@ export default function BusAlertsPage() {
                         {sentAlertsHistory.map((item) => (
                             <li
                                 key={item.id}
-                                className={`bus-alert-history-item flex items-center justify-between rounded-lg border px-3 py-2 ${getAlertColor(item.type).historyRow}`}
+                                className={`bus-alert-history-item flex items-center justify-between rounded-lg border px-3 py-2 ${getAlertColor(item.type).historyRow} min-w-0`}
                             >
-                                <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                <span className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
                                     <img
                                         src={item.iconSrc}
                                         alt={ALERT_LABEL_MAP[item.type as BusAlertType]}
                                         className="h-5 w-5 object-contain"
                                     />
-                                    {item.title}
+                                    <span className="wrap-break-word">{item.title}</span>
                                 </span>
-                                <span className="text-xs text-gray-500">{item.time}</span>
+                                <span className="text-xs text-gray-500 ml-2 shrink-0">{item.time}</span>
                             </li>
                         ))}
                     </ul>

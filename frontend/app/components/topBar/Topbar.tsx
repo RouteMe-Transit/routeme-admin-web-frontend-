@@ -53,102 +53,87 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
   }, [busInfo]);
 
   return (
-    <div className={`${topbarThemeClass} w-full h-16 bg-white shadow flex items-center justify-between px-6 sticky top-0 z-10`}>
-      <div className="flex items-center gap-4">
-        {icon}
-        <h1 className="text-2xl font-bold">{title}</h1>
-      </div>
-
+    <div className={`${topbarThemeClass} sticky top-0 z-10 flex h-auto min-h-16 w-full shrink-0 ${isBusRoute ? "flex-col gap-3" : "flex-col sm:flex-row sm:items-center"} justify-between overflow-x-hidden bg-white px-4 py-3 shadow sm:px-6 ${isBusRoute ? "" : "sm:h-16"}`}>
       {isBusRoute ? (
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <FaCircle
-              className={`${gpsEnabled ? "text-green-500" : "text-red-500"} mr-2 ${gpsEnabled ? "animate-pulse" : ""}`}
-            />
-            <div
-              className={`rounded-md border px-2 py-1 text-xs font-semibold ${
-                gpsEnabled
-                  ? "border-green-500 text-green-600 bg-green-50"
-                  : "border-red-500 text-red-600 bg-red-50"
-              }`}
-            >
+        /* Responsive grid:
+           - mobile: 2 columns -> row1: title + tracking, row2: driver + bus info
+           - sm+: 4 columns -> single row: title | tracking | driver | bus info
+        */
+        <div className="w-full grid grid-cols-2 items-center gap-3 sm:gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+          {/* Title */}
+          <div className="col-span-1 flex min-w-0 items-center gap-3 pl-12 sm:pl-0">
+            <span className="hidden sm:inline">{icon}</span>
+            <h1 className="min-w-0 wrap-break-word text-xl font-bold sm:text-2xl">{title}</h1>
+          </div>
+
+          {/* Tracking (places to right of title on mobile, second column) */}
+          <div className="col-span-1 flex justify-end items-center gap-2 whitespace-nowrap">
+            <FaCircle className={`${gpsEnabled ? "text-green-500" : "text-red-500"} mr-2 ${gpsEnabled ? "animate-pulse" : ""}`} />
+            <div className={`rounded-md border px-2 py-1 text-xs font-semibold ${gpsEnabled ? "border-green-500 text-green-600 bg-green-50" : "border-red-500 text-red-600 bg-red-50"}`}>
               Tracking Live
             </div>
           </div>
 
-          {busInfo && (
-            <div className="rounded-md border border-[#94A0AE] bg-slate-50 px-3 py-2">
-              <label className="text-xs font-semibold text-slate-500">Driver</label>
-              <select
-                key={driverSelectKey}
-                className="ml-2 rounded bg-white px-2 py-1 text-sm text-slate-700 outline-none"
-                defaultValue={defaultDriver}
-              >
-                {(busInfo.drivers ?? []).map((driver) => (
-                  <option key={driver} value={driver}>
-                    {driver}
-                  </option>
-                ))}
-              </select>
+          {/* Driver (mobile: left of second row; sm+: third column) */}
+          {busInfo ? (
+            <div className="col-span-1 mt-2 sm:mt-0 flex justify-start sm:justify-end items-center">
+              <div className="rounded-md border border-[#94A0AE] bg-slate-50 px-3 py-2">
+                <label className="text-xs font-semibold text-slate-500">Driver</label>
+                <select key={driverSelectKey} className="ml-2 w-24 rounded bg-white px-2 py-1 text-sm text-slate-700 outline-none" defaultValue={defaultDriver}>
+                  {(busInfo.drivers ?? []).map((driver) => (
+                    <option key={driver} value={driver}>
+                      {driver}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+          ) : (
+            <div className="col-span-1" />
           )}
 
-          <div className="bus-topbar-meta rounded-full border border-[#94A0AE] bg-[#EEEEEE] px-3 py-2 text-sm text-slate-700 flex items-center gap-1 w-[170px] h-14">
-            <img src="/icons/bus.png" alt="bus" className=" w-6 h-6 mr-2" />
-            <div>
-                <p className="font-bold">{busInfo?.busId ?? ""}</p>
-                <p>{busInfo?.routeName ?? busInfo?.routeNumber ?? ""}</p>
+          {/* Bus info (mobile: right of second row; sm+: fourth column) */}
+          {busInfo ? (
+            <div className="col-span-1 mt-2 sm:mt-0 flex justify-end items-center">
+              <div className="bus-topbar-meta flex h-14 w-42.5 items-center gap-1 rounded-full border border-[#94A0AE] bg-[#EEEEEE] px-3 py-2 text-sm text-slate-700">
+                <img src="/icons/bus.png" alt="bus" className=" w-6 h-6 mr-2" />
+                <div>
+                  <p className="font-bold">{busInfo?.busId ?? ""}</p>
+                  <p>{busInfo?.routeName ?? busInfo?.routeNumber ?? ""}</p>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="col-span-1" />
+          )}
         </div>
       ) : (
-        !busInfo && isPassengerLiveTracking ? (
-          <div className="flex gap-3 items-center">
-            <div className="flex items-center gap-2 mr-1">
-              <FaCircle className="text-green-500 animate-pulse text-xs" />
-              <span className="text-green-600 font-semibold">Live</span>
+        <>
+          <div className="flex min-w-0 items-center gap-3 pl-12 sm:gap-4 sm:pl-0">
+            {icon}
+            <h1 className="min-w-0 wrap-break-word text-xl font-bold sm:text-2xl">{title}</h1>
+          </div>
+
+          {(!busInfo && isPassengerLiveTracking) && (
+            <div className="ml-auto flex max-w-full flex-wrap items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <FaCircle className="text-green-500 animate-pulse text-xs" />
+                <span className="text-green-600 font-semibold">Live</span>
+              </div>
+
+              <select className="max-w-[calc(100vw-150px)] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 whitespace-nowrap sm:max-w-none sm:px-4">
+                <option>All Routes</option>
+                <option>115</option>
+                <option>120</option>
+                <option>122</option>
+              </select>
+
+              <button type="button" onClick={() => window.location.reload()} className="hidden bg-[#4caf8a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3f9c79] sm:inline-flex rounded-lg">
+                Refresh
+              </button>
             </div>
-
-            <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white text-slate-700">
-              <option>All Routes</option>
-              <option>115</option>
-              <option>120</option>
-              <option>122</option>
-            </select>
-
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="bg-[#4caf8a] text-white px-4 py-2 rounded-lg hover:bg-[#3f9c79] text-sm font-semibold"
-            >
-              Refresh
-            </button>
-          </div>
-        ) : null
-      )}
-
-      {!busInfo && isPassengerLiveTracking && (
-        <div className="flex gap-3 items-center">
-          <div className="flex items-center gap-2 mr-1">
-            <FaCircle className="text-green-500 animate-pulse text-xs" />
-            <span className="text-green-600 font-semibold">Live</span>
-          </div>
-
-          <select className="border border-slate-300 rounded-lg px-4 py-2 text-sm bg-white text-slate-700">
-            <option>All Routes</option>
-            <option>115</option>
-            <option>120</option>
-            <option>122</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="bg-[#4caf8a] text-white px-4 py-2 rounded-lg hover:bg-[#3f9c79] text-sm font-semibold"
-          >
-            Refresh
-          </button>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
