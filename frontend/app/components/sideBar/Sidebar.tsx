@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import api from "@/app/services/api";
 import SidebarItem from "./SidebarItem";
 import LogoNname from "../logoNname/logoNname";
-import { FaPowerOff } from "react-icons/fa6";
+import { FaBars, FaPowerOff, FaXmark } from "react-icons/fa6";
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import {
   PASSENGER_ALERTS_CHANGED_EVENT,
@@ -168,6 +168,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const [localGpsEnabled, setLocalGpsEnabled] = useState(false);
   const [unreadPassengerAlerts, setUnreadPassengerAlerts] = useState(0);
   const [expandedSection, setExpandedSection] = useState<string | null>("overview");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isGpsEnabled = gpsEnabled ?? localGpsEnabled;
 
   const loadUnreadPassengerAlerts = useCallback(async () => {
@@ -262,6 +263,10 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
     };
   }, [loadUnreadPassengerAlerts, role, pathname]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   const items = menus[role] as MenuItem[];
 
   const renderMenuItem = (item: MenuItem, indented = false) => {
@@ -276,6 +281,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
           badgeCount={isPassengerAlerts && unreadPassengerAlerts > 0 ? unreadPassengerAlerts : undefined}
           onClick={() => {
             if (item.path) router.push(item.path);
+            setMobileMenuOpen(false);
           }}
         />
       </div>
@@ -287,13 +293,33 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   };
 
   return (
-    <div
-      className={`h-screen bg-[#122843] text-white flex flex-col sticky top-0 z-20 ${role === "passenger" ? "passenger-sidebar" : ""} ${role === "bus" ? "bus-sidebar" : ""} ${role === "admin" ? "admin-sidebar" : ""}`}
-      style={{ width: "385px" }}
-    >
-      <LogoNname/>
+    <>
+      <button
+        type="button"
+        aria-label={mobileMenuOpen ? "Close sidebar menu" : "Open sidebar menu"}
+        onClick={() => setMobileMenuOpen((prev) => !prev)}
+        className="fixed left-4 top-4 z-1200 flex h-11 w-11 items-center justify-center rounded-full bg-[#122843] text-white shadow-lg md:hidden"
+      >
+        {mobileMenuOpen ? <FaXmark className="text-xl" /> : <FaBars className="text-xl" />}
+      </button>
 
-      <div className="border-t border-gray-700" />
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar backdrop"
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 z-1100 bg-black/50 backdrop-blur-[1px] md:hidden"
+        />
+      )}
+
+      <div
+        className={`fixed inset-y-0 left-0 z-1201 flex h-dvh w-70 -translate-x-full flex-col overflow-y-auto bg-[#122843] text-white shadow-2xl transition-transform duration-300 ease-in-out md:sticky md:top-0 md:z-20 md:h-dvh md:self-start md:shrink-0 md:w-96.25 md:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : ""} ${role === "passenger" ? "passenger-sidebar" : ""} ${role === "bus" ? "bus-sidebar" : ""} ${role === "admin" ? "admin-sidebar" : ""}`}
+      >
+        <div className="pt-4 md:pt-0">
+          <LogoNname />
+        </div>
+
+        <div className="border-t border-gray-700" />
 
         {/* Menu */}
         <div className="flex flex-col mt-3 space-y-2 px-2">
@@ -364,6 +390,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
             </button>
           )}
         </div>
-    </div>
+      </div>
+    </>
   );
 }
