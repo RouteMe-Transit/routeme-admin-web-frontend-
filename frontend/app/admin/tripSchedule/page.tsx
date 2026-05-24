@@ -5,7 +5,8 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import { CgClose } from "react-icons/cg";
 import { IoEye, IoSearch, IoAddCircle } from "react-icons/io5";
-import { IoPencil, IoBan, IoCheckmarkCircle } from "react-icons/io5";
+import { IoPencil } from "react-icons/io5";
+import { FaToggleOn } from "react-icons/fa6";
 import {
   FaCheckCircle,
   FaExclamationTriangle,
@@ -109,7 +110,7 @@ function StatCard({
 }) {
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
-      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
         {icon}
       </div>
       <div>
@@ -137,7 +138,7 @@ const emptyForm = (): FormData => ({
   departureTime: "",
   arrivalTime: "",
   days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-  status: "scheduled",
+  status: "active",
 });
 
 const inputCls = "w-full h-10 border border-gray-200 rounded-lg px-3 text-sm outline-none focus:border-[#4CAF8A] focus:ring-1 focus:ring-[#4CAF8A] transition bg-white text-black";
@@ -162,20 +163,26 @@ export default function AdminManageTrips() {
   const [formError,   setFormError]   = useState("");
   const [apiError,    setApiError]    = useState("");
   const [viewTrip,    setViewTrip]    = useState<Trip | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
 
   const totalTrips     = trips.length;
-  const activeNow      = trips.filter((t) => t.status === "active").length;
+  const activeNow      = trips.filter((t) => t.isActive).length;
   const delayedTrips   = trips.filter((t) => t.status === "delayed").length;
-  const scheduledTrips = trips.filter((t) => t.status === "scheduled").length;
+  const deactivatedTrips = trips.filter((t) => !t.isActive).length;
 
   // ── Load trips ─────────────────────────────────────────────────────────────
-  const loadTrips = useCallback(async () => {
-    setLoading(true);
+  const loadTrips = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const { data } = await api.get<{ data: { trips: Trip[]; total: number } }>("/trips", {
         params: { limit: 200 },
       });
-      setTrips(data.data.trips ?? []);
+      const nextTrips = data.data.trips ?? [];
+      setTrips(nextTrips);
+      setViewTrip((prev) => {
+        if (!prev) return prev;
+        return nextTrips.find((trip) => trip.id === prev.id) ?? prev;
+      });
     } catch (err: any) {
       Swal.fire({
         icon: "error",
@@ -183,7 +190,7 @@ export default function AdminManageTrips() {
         text: err.response?.data?.message ?? err.message ?? "Unknown error",
       });
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
@@ -286,7 +293,7 @@ export default function AdminManageTrips() {
       departureTime: form.departureTime,
       arrivalTime:   form.arrivalTime,
       days:          form.days,
-      status:        form.status,
+      status:        editingTrip?.status ?? "active",
     };
 
     try {
@@ -304,27 +311,6 @@ export default function AdminManageTrips() {
     }
   };
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
-  const handleDelete = async (trip: Trip) => {
-    const result = await Swal.fire({
-      title: `Delete TR-${String(trip.id).padStart(3, "0")}?`,
-      text: "This trip schedule will be permanently removed.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Yes, delete",
-    });
-    if (!result.isConfirmed) return;
-    try {
-      await api.delete(`/trips/${trip.id}`);
-      await loadTrips();
-      Swal.fire({ icon: "success", title: "Trip Deleted", timer: 1500, showConfirmButton: false });
-    } catch (err: any) {
-      Swal.fire({ icon: "error", title: err.response?.data?.message ?? err.message ?? "Failed to delete" });
-    }
-  };
-
   // ── Update status inline ───────────────────────────────────────────────────
   const handleStatusChange = async (trip: Trip, status: TripStatus) => {
     try {
@@ -332,6 +318,20 @@ export default function AdminManageTrips() {
       setTrips((prev) => prev.map((t) => t.id === trip.id ? { ...t, status } : t));
     } catch (err: any) {
       Swal.fire({ icon: "error", title: err.response?.data?.message ?? err.message ?? "Failed" });
+    }
+  };
+
+  const handleToggleActive = async (trip: Trip) => {
+    const nextIsActive = !trip.isActive;
+
+    setStatusUpdatingId(trip.id);
+    try {
+      await api.patch(`/trips/${trip.id}/toggle`);
+      await loadTrips({ silent: true });
+    } catch (err: any) {
+      Swal.fire({ icon: "error", title: err.response?.data?.message ?? err.message ?? "Failed" });
+    } finally {
+      setStatusUpdatingId(null);
     }
   };
 
@@ -352,13 +352,13 @@ export default function AdminManageTrips() {
           bg="bg-yellow-50" value={delayedTrips} label="Delayed" color="text-yellow-600" />
         <StatCard
           icon={<FaCalendarAlt className="w-6 h-6 text-indigo-500" />}
-          bg="bg-indigo-50" value={scheduledTrips} label="Scheduled" color="text-indigo-600" />
+          bg="bg-indigo-50" value={deactivatedTrips} label="Deactivated Trips" color="text-indigo-600" />
       </div>
 
       {/* ── TOOLBAR ── */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 w-64 shadow-sm">
-          <IoSearch className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <IoSearch className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             type="text"
             placeholder="Search trip ID, route or bus…"
@@ -401,7 +401,7 @@ export default function AdminManageTrips() {
       {/* ── TABLE ── */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
 
-        <div className="grid grid-cols-[110px_160px_130px_100px_100px_100px_150px_110px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+        <div className="grid grid-cols-[110px_220px_130px_100px_100px_100px_150px_116px] bg-[#f8fafc] px-5 pr-2.5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
           <div>Trip ID</div>
           <div>Route</div>
           <div>Bus</div>
@@ -409,8 +409,7 @@ export default function AdminManageTrips() {
           <div>Arrival</div>
           <div>Duration</div>
           <div>Days</div>
-          <div>Status</div>
-          <div className="text-center">Actions</div>
+          <div className="text-right pr-2.5">Actions</div>
         </div>
 
         {loading ? (
@@ -430,7 +429,7 @@ export default function AdminManageTrips() {
           filtered.map((trip, idx) => (
             <div
               key={trip.id}
-              className={`grid grid-cols-[110px_160px_130px_100px_100px_100px_150px_110px_116px] items-center px-5 py-3.5 border-b transition-colors duration-150 ${
+              className={`grid grid-cols-[110px_220px_130px_100px_100px_100px_150px_116px] items-center px-5 pr-2.5 py-3.5 border-b transition-colors duration-150 ${
                 idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
               } hover:bg-blue-50/30`}
             >
@@ -476,14 +475,7 @@ export default function AdminManageTrips() {
                 {fmtDays(trip.days)}
               </div>
 
-              <div>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide ${STATUS_STYLES[trip.status]}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[trip.status]}`} />
-                  {trip.status}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-center gap-1.5">
+              <div className="flex items-center justify-end gap-1.5 pr-2.5">
                 <button
                   onClick={() => setViewTrip(trip)}
                   title="View details"
@@ -499,11 +491,12 @@ export default function AdminManageTrips() {
                   <IoPencil className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => handleDelete(trip)}
-                  title="Delete trip"
-                  className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 flex items-center justify-center transition-all active:scale-90"
+                  onClick={() => void handleToggleActive(trip)}
+                  title={trip.isActive ? "Deactivate trip" : "Activate trip"}
+                  disabled={statusUpdatingId === trip.id}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-90 disabled:cursor-not-allowed disabled:opacity-50 ${trip.isActive ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700" : "bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800"}`}
                 >
-                  <CgClose className="w-4 h-4" />
+                  <FaToggleOn className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -524,7 +517,7 @@ export default function AdminManageTrips() {
             >✕</button>
 
             <div className="mb-6 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#122843] flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-[#122843] flex items-center justify-center shrink-0">
                 <MdSchedule className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -668,18 +661,6 @@ export default function AdminManageTrips() {
                 </div>
               </div>
 
-              <div className="col-span-2">
-                <label className={labelCls}>Status</label>
-                <select
-                  className={inputCls}
-                  value={form.status}
-                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as TripStatus }))}
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
@@ -713,17 +694,14 @@ export default function AdminManageTrips() {
             >✕</button>
 
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 rounded-xl bg-[#122843] flex items-center justify-center flex-shrink-0">
+              <div className="w-14 h-14 rounded-xl bg-[#122843] flex items-center justify-center shrink-0">
                 <MdSchedule className="w-7 h-7 text-white" />
               </div>
               <div>
                 <h2 className="text-xl font-black text-[#122843] tracking-tight">
                   Trip Info: {`TR-${String(viewTrip.id).padStart(3, "0")}`}
                 </h2>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide mt-1 ${STATUS_STYLES[viewTrip.status]}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[viewTrip.status]}`} />
-                  {viewTrip.status}
-                </span>
+                
               </div>
             </div>
 
@@ -746,28 +724,6 @@ export default function AdminManageTrips() {
                   <p className="font-bold text-gray-800 text-sm">{val}</p>
                 </div>
               ))}
-            </div>
-
-            <div className="mb-4">
-              <p className={`${labelCls} mb-2`}>Update Status</p>
-              <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      handleStatusChange(viewTrip, s);
-                      setViewTrip((prev) => prev ? { ...prev, status: s } : null);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition border-2 ${
-                      viewTrip.status === s
-                        ? "border-[#122843] bg-[#122843] text-white"
-                        : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="flex justify-between items-center">
