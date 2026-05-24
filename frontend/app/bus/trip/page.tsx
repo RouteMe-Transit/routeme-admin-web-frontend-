@@ -9,7 +9,10 @@ type ApiTrip = {
   direction?: string;
   departureTime?: string;
   arrivalTime?: string;
+  displayStatus?: string;
   status?: string;
+  statusLabel?: string;
+  nextStatusLabel?: string;
   isActive?: boolean;
 };
 
@@ -31,6 +34,24 @@ type TodayTripsResponse = {
   trips?: ApiTrip[];
 };
 
+type TripStopsResponse = {
+  tripId?: number | string;
+  tripNumber?: number | string;
+  routeName?: string;
+  direction?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  currentStatus?: string;
+  statusLabel?: string;
+  stops?: TripStop[];
+};
+
+type UpdateTripStatusResponse = {
+  status?: string;
+  statusLabel?: string;
+  trip?: ApiTrip;
+};
+
 const getApiBaseUrl = () => {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1";
   return apiUrl.replace(/\/+$/, "");
@@ -38,7 +59,7 @@ const getApiBaseUrl = () => {
 
 const getAuthHeaders = () => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return token ? ({ Authorization: `Bearer ${token}` } as HeadersInit) : ({} as HeadersInit);
 };
 
 const formatTime = (value?: string) => {
@@ -58,35 +79,60 @@ const formatTime = (value?: string) => {
   return `${String(normalizedHours).padStart(2, "0")}:${minutes} ${period}`;
 };
 
-const normalizeStatus = (value?: string, isActive?: boolean) => {
-  const status = value?.trim().toLowerCase();
+type TripDisplayStatus = "scheduled" | "active" | "ongoing" | "completed";
 
-  if (status === "start") return "scheduled";
-  if (status === "ongoing" || status === "active") return "ongoing";
-  if (status === "finished" || status === "completed" || status === "done") return "finished";
-  if (status === "scheduled" || status === "upcoming") return "scheduled";
+const getTripDisplayStatus = (
+  trip: Pick<ApiTrip, "displayStatus" | "status" | "statusLabel" | "nextStatusLabel" | "isActive"> | Pick<TripStopsResponse, "currentStatus" | "statusLabel">,
+): TripDisplayStatus => {
+  const statusSource = "displayStatus" in trip
+    ? trip.displayStatus ?? trip.statusLabel ?? trip.status
+    : "currentStatus" in trip
+    ? trip.currentStatus ?? trip.statusLabel
+    : trip.statusLabel;
 
-  return isActive ? "ongoing" : "scheduled";
+  const normalized = statusSource?.trim().toLowerCase();
+
+  if (normalized === "finished" || normalized === "completed" || normalized === "done") {
+    return "completed";
+  }
+
+  if (normalized === "ongoing" || normalized === "active") {
+    return normalized;
+  }
+
+  if (normalized === "scheduled" || normalized === "upcoming" || normalized === "start") {
+    return "scheduled";
+  }
+
+  return "isActive" in trip && trip.isActive ? "active" : "scheduled";
 };
 
-const toBackendStatus = (value: "start" | "ongoing" | "finished") => value;
+const toBackendStatus = (value: "active" | "finished") => value;
 
-const getNextStatus = (currentStatus?: string, isActive?: boolean): "start" | "ongoing" | "finished" => {
-  const status = currentStatus?.trim().toLowerCase();
-
-  if (status === "finished" || status === "completed" || status === "done") {
+const getNextStatus = (displayStatus: TripDisplayStatus): "active" | "finished" => {
+  if (displayStatus === "completed") {
     return "finished";
   }
 
-  if (status === "ongoing" || status === "active" || isActive) {
+  if (displayStatus === "active" || displayStatus === "ongoing") {
     return "finished";
   }
 
-  return "start";
+  return "active";
+};
+
+const normalizeUpdateResponse = (payload: unknown): UpdateTripStatusResponse => {
+  if (!payload || typeof payload !== "object") {
+    return {};
+  }
+
+  const record = payload as { data?: UpdateTripStatusResponse } & UpdateTripStatusResponse;
+  return record.data ?? record;
 };
 
 export default function DriverSchedulePage() {
   const [busData, setBusData] = useState<TodayTripsResponse | null>(null);
+  const [tripStopsInfo, setTripStopsInfo] = useState<TripStopsResponse | null>(null);
   const [stops, setStops] = useState<TripStop[]>([]);
   const [loading, setLoading] = useState(true);
   const [stopsLoading, setStopsLoading] = useState(false);
@@ -94,37 +140,18 @@ export default function DriverSchedulePage() {
   const [stopsError, setStopsError] = useState("");
   const [updatingTripId, setUpdatingTripId] = useState<number | string | null>(null);
 
-  const activeTrip = busData?.trips?.find((trip) => {
-    const status = trip.status?.trim().toLowerCase();
-    return status === "active" || status === "ongoing" || trip.isActive;
-  }) ?? busData?.trips?.[0];
+  const activeTrip = busData?.trips?.find((trip) => getTripDisplayStatus(trip) === "ongoing" || getTripDisplayStatus(trip) === "active");
 
   const activeTripId = activeTrip?.id;
 
-  const refreshTodayTrips = async () => {
-    const response = await fetch(`${getApiBaseUrl()}/bus-trips/today`, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        ...getAuthHeaders(),
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
-
-    const payload = (await response.json()) as { data?: TodayTripsResponse } | TodayTripsResponse;
-    setBusData((payload as { data?: TodayTripsResponse })?.data ?? (payload as TodayTripsResponse));
-  };
-
-  const handleUpdateTripStatus = async (tripId: number | string, currentStatus?: string, isActive?: boolean) => {
-    const nextStatus = getNextStatus(currentStatus, isActive);
+  const handleUpdateTripStatus = async (trip: ApiTrip) => {
+    const currentStatus = getTripDisplayStatus(trip);
+    const nextStatus = getNextStatus(currentStatus);
 
     try {
-      setUpdatingTripId(tripId);
+      setUpdatingTripId(trip.id);
 
-      const response = await fetch(`${getApiBaseUrl()}/bus-trips/${tripId}/status`, {
+      const response = await fetch(`${getApiBaseUrl()}/bus-trips/${trip.id}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -134,12 +161,45 @@ export default function DriverSchedulePage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(errorText || `Request failed with status ${response.status}`);
       }
 
-      await refreshTodayTrips();
-    } catch {
-      setError("Failed to update trip status");
+      const payload = normalizeUpdateResponse(await response.json());
+      const updatedTrip = payload.trip;
+      const resolvedStatus = getTripDisplayStatus({
+        displayStatus: updatedTrip?.displayStatus ?? payload.statusLabel ?? payload.status ?? nextStatus,
+        status: updatedTrip?.status,
+        statusLabel: updatedTrip?.statusLabel ?? payload.statusLabel,
+        nextStatusLabel: updatedTrip?.nextStatusLabel,
+        isActive: updatedTrip?.isActive ?? nextStatus !== "finished",
+      });
+
+      setBusData((prev) => {
+        if (!prev?.trips?.length) return prev;
+
+        const nextTrips = prev.trips.map((rowTrip) => {
+          if (String(rowTrip.id) !== String(trip.id)) return rowTrip;
+
+          return {
+            ...rowTrip,
+            ...updatedTrip,
+            displayStatus: updatedTrip?.displayStatus ?? payload.statusLabel ?? payload.status ?? resolvedStatus,
+            status: payload.status ?? payload.statusLabel ?? updatedTrip?.status ?? nextStatus,
+            statusLabel: payload.statusLabel ?? updatedTrip?.statusLabel ?? updatedTrip?.displayStatus ?? resolvedStatus,
+            nextStatusLabel: updatedTrip?.nextStatusLabel ?? (resolvedStatus === "completed" ? "" : resolvedStatus === "active" || resolvedStatus === "ongoing" ? "Finished" : "Start"),
+            isActive: resolvedStatus === "active" || resolvedStatus === "ongoing",
+          };
+        });
+
+        return {
+          ...prev,
+          trips: nextTrips,
+        };
+      });
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : "Failed to update trip status";
+      setError(message);
     } finally {
       setUpdatingTripId(null);
     }
@@ -210,13 +270,17 @@ export default function DriverSchedulePage() {
           throw new Error(`Request failed with status ${response.status}`);
         }
 
-        const payload = (await response.json()) as { data?: { stops?: TripStop[] } } | { stops?: TripStop[] };
-        const tripStops = (payload as { data?: { stops?: TripStop[] } })?.data?.stops ?? (payload as { stops?: TripStop[] })?.stops ?? [];
+        const payload = (await response.json()) as { data?: TripStopsResponse } | TripStopsResponse;
+        const tripInfo = (payload as { data?: TripStopsResponse })?.data ?? (payload as TripStopsResponse);
+        const tripStops = tripInfo?.stops ?? [];
+
+        setTripStopsInfo(tripInfo ?? null);
         setStops(Array.isArray(tripStops) ? tripStops : []);
       } catch (fetchError) {
         if ((fetchError as Error).name !== "AbortError") {
           setStopsError("Failed to load trip stops");
           setStops([]);
+          setTripStopsInfo(null);
         }
       } finally {
         setStopsLoading(false);
@@ -231,7 +295,12 @@ export default function DriverSchedulePage() {
   const trips = busData?.trips ?? [];
   const registrationNumber = busData?.registrationNumber ?? "—";
   const todayDay = busData?.todayDay ?? "Today";
-  const activeTripLabel = activeTrip ? `${activeTrip.tripNumber ?? activeTrip.id} - ${activeTrip.routeName ?? "Trip"}` : "No active trip";
+  const currentTripSummary = tripStopsInfo ?? activeTrip ?? null;
+  const currentTripDisplayStatus = currentTripSummary ? getTripDisplayStatus(currentTripSummary) : null;
+  const currentTripNumber = tripStopsInfo?.tripNumber ?? activeTrip?.tripNumber ?? activeTrip?.id ?? tripStopsInfo?.tripId ?? null;
+  const activeTripLabel = currentTripSummary
+    ? `${currentTripNumber ?? "—"} - ${currentTripSummary.routeName ?? activeTrip?.routeName ?? "Trip"}`
+    : "No ongoing trip";
 
   return (
     <section className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -268,7 +337,11 @@ export default function DriverSchedulePage() {
 
               <tbody>
                 {trips.map((trip, index) => {
-                  const status = normalizeStatus(trip.status, trip.isActive);
+                  const displayStatus = getTripDisplayStatus(trip);
+                  const isCompleted = displayStatus === "completed";
+                  const isRunning = displayStatus === "active" || displayStatus === "ongoing";
+                  const buttonLabel = trip.nextStatusLabel ?? (isRunning ? "Finished" : "Start");
+                  const badgeLabel = trip.displayStatus ?? trip.statusLabel ?? trip.status ?? (isCompleted ? "completed" : isRunning ? "ongoing" : "scheduled");
 
                   return (
                     <tr
@@ -289,30 +362,28 @@ export default function DriverSchedulePage() {
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold text-white shadow-sm ${
-                            status === "finished"
+                            isCompleted
                               ? "bg-blue-700"
-                              : status === "ongoing"
+                              : isRunning
                               ? "bg-amber-500"
                               : "bg-emerald-600"
                           }`}
                         >
-                          {status === "finished" ? "Finished" : status === "ongoing" ? "Ongoing" : "Scheduled"}
+                          {badgeLabel}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
                           type="button"
-                          disabled={updatingTripId === trip.id || status === "finished"}
-                          onClick={() => void handleUpdateTripStatus(trip.id, trip.status, trip.isActive)}
+                          disabled={updatingTripId === trip.id || isCompleted}
+                          onClick={() => void handleUpdateTripStatus(trip)}
                           className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {updatingTripId === trip.id
                             ? "Updating..."
-                            : status === "finished"
+                            : isCompleted
                             ? "Completed"
-                            : status === "ongoing"
-                            ? "Mark Finished"
-                            : "Start Trip"}
+                            : buttonLabel}
                         </button>
                       </td>
                     </tr>
@@ -342,7 +413,11 @@ export default function DriverSchedulePage() {
           </div>
         </div>
 
-        {stopsLoading ? (
+        {!currentTripDisplayStatus || (currentTripDisplayStatus !== "ongoing" && currentTripDisplayStatus !== "active") ? (
+          <div className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+            Stops appear when a trip is started and disappear after it is finished.
+          </div>
+        ) : stopsLoading ? (
           <div className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">Loading stops...</div>
         ) : stopsError ? (
           <div className="rounded-lg bg-rose-50 px-3 py-3 text-sm text-rose-600">{stopsError}</div>

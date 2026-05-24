@@ -168,7 +168,7 @@ export default function AdminManageTrips() {
   const totalTrips     = trips.length;
   const activeNow      = trips.filter((t) => t.isActive).length;
   const delayedTrips   = trips.filter((t) => t.status === "delayed").length;
-  const scheduledTrips = trips.filter((t) => t.status === "scheduled").length;
+  const deactivatedTrips = trips.filter((t) => !t.isActive).length;
 
   // ── Load trips ─────────────────────────────────────────────────────────────
   const loadTrips = useCallback(async (opts?: { silent?: boolean }) => {
@@ -352,7 +352,7 @@ export default function AdminManageTrips() {
           bg="bg-yellow-50" value={delayedTrips} label="Delayed" color="text-yellow-600" />
         <StatCard
           icon={<FaCalendarAlt className="w-6 h-6 text-indigo-500" />}
-          bg="bg-indigo-50" value={scheduledTrips} label="Upcoming" color="text-indigo-600" />
+          bg="bg-indigo-50" value={deactivatedTrips} label="Deactivated Trips" color="text-indigo-600" />
       </div>
 
       {/* ── TOOLBAR ── */}
