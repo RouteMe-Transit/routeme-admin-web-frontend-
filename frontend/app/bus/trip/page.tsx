@@ -1,269 +1,387 @@
 "use client";
-import { useState } from "react";
 
-type Trip = {
-  id: number;
-  direction: string;
-  departure: string;
-  arrival: string;
-  days: string;
-  status: "start" | "ongoing" | "finished";
+import { useEffect, useState } from "react";
+
+type ApiTrip = {
+  id: number | string;
+  tripNumber?: number;
+  routeName?: string;
+  direction?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  status?: string;
+  isActive?: boolean;
 };
 
-type Stop = {
-  id: number;
-  name: string;
-  status: "departed" | "current" | "upcoming";
-  time?: string;
+type TripStop = {
+  sequence?: number;
+  stopId?: number | string;
+  stopName?: string;
+  latitude?: number;
+  longitude?: number;
+  scheduledTime?: string;
+  status?: string;
+  estimatedArrival?: string;
+};
+
+type TodayTripsResponse = {
+  busId?: number | string;
+  registrationNumber?: string;
+  todayDay?: string;
+  trips?: ApiTrip[];
+};
+
+const getApiBaseUrl = () => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1";
+  return apiUrl.replace(/\/+$/, "");
+};
+
+const getAuthHeaders = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const formatTime = (value?: string) => {
+  if (!value) return "—";
+
+  const trimmed = value.trim();
+  if (trimmed === "") return "—";
+
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return trimmed;
+
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  const period = hours >= 12 ? "PM" : "AM";
+  const normalizedHours = hours % 12 || 12;
+
+  return `${String(normalizedHours).padStart(2, "0")}:${minutes} ${period}`;
+};
+
+const normalizeStatus = (value?: string, isActive?: boolean) => {
+  const status = value?.trim().toLowerCase();
+
+  if (status === "start") return "scheduled";
+  if (status === "ongoing" || status === "active") return "ongoing";
+  if (status === "finished" || status === "completed" || status === "done") return "finished";
+  if (status === "scheduled" || status === "upcoming") return "scheduled";
+
+  return isActive ? "ongoing" : "scheduled";
+};
+
+const toBackendStatus = (value: "start" | "ongoing" | "finished") => value;
+
+const getNextStatus = (currentStatus?: string, isActive?: boolean): "start" | "ongoing" | "finished" => {
+  const status = currentStatus?.trim().toLowerCase();
+
+  if (status === "finished" || status === "completed" || status === "done") {
+    return "finished";
+  }
+
+  if (status === "ongoing" || status === "active" || isActive) {
+    return "finished";
+  }
+
+  return "start";
 };
 
 export default function DriverSchedulePage() {
-  const [trips, setTrips] = useState<Trip[]>([
-    {
-      id: 1,
-      direction: "Fort → Mount Lavinia",
-      departure: "06:00 AM",
-      arrival: "06:50 AM",
-      days: "Mon–Sat",
-      status: "finished",
-    },
-    {
-      id: 2,
-      direction: "Mount Lavinia → Fort",
-      departure: "07:15 AM",
-      arrival: "08:05 AM",
-      days: "Mon–Sat",
-      status: "finished",
-    },
-    {
-      id: 3,
-      direction: "Fort → Mount Lavinia",
-      departure: "09:30 AM",
-      arrival: "10:20 AM",
-      days: "Mon–Sat",
-      status: "ongoing",
-    },
-    {
-      id: 4,
-      direction: "Mount Lavinia → Fort",
-      departure: "10:45 AM",
-      arrival: "11:35 AM",
-      days: "Mon–Sat",
-      status: "start",
-    },
-    {
-      id: 5,
-      direction: "Fort → Moratuwa",
-      departure: "12:10 PM",
-      arrival: "01:05 PM",
-      days: "Mon–Fri",
-      status: "start",
-    },
-    {
-      id: 6,
-      direction: "Moratuwa → Fort",
-      departure: "01:30 PM",
-      arrival: "02:25 PM",
-      days: "Mon–Fri",
-      status: "ongoing",
-    },
-    {
-      id: 7,
-      direction: "Fort → Panadura",
-      departure: "03:00 PM",
-      arrival: "04:10 PM",
-      days: "Daily",
-      status: "start",
-    },
-    {
-      id: 8,
-      direction: "Panadura → Fort",
-      departure: "04:35 PM",
-      arrival: "05:45 PM",
-      days: "Daily",
-      status: "finished",
-    },
-    {
-      id: 9,
-      direction: "Fort → Galle",
-      departure: "06:00 PM",
-      arrival: "08:30 PM",
-      days: "Mon–Sat",
-      status: "start",
-    },
-    {
-      id: 10,
-      direction: "Galle → Fort",
-      departure: "09:00 PM",
-      arrival: "11:20 PM",
-      days: "Mon–Sat",
-      status: "ongoing",
-    },
-  ]);
+  const [busData, setBusData] = useState<TodayTripsResponse | null>(null);
+  const [stops, setStops] = useState<TripStop[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stopsLoading, setStopsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [stopsError, setStopsError] = useState("");
+  const [updatingTripId, setUpdatingTripId] = useState<number | string | null>(null);
 
-  const [stops] = useState<Stop[]>([
-    { id: 1, name: "Colombo Fort", status: "departed" },
-    { id: 2, name: "Pettah", status: "departed" },
-    { id: 3, name: "Maradana", status: "departed" },
-    { id: 4, name: "Borella", status: "current" },
-    { id: 5, name: "Narahenpita", status: "upcoming", time: "4 min" },
-    { id: 6, name: "Bambalapitiya", status: "upcoming", time: "11 min" },
-    { id: 7, name: "Wellawatte", status: "upcoming", time: "18 min" },
-    { id: 8, name: "Dehiwala", status: "upcoming", time: "26 min" },
-    { id: 9, name: "Mount Lavinia", status: "upcoming", time: "34 min" },
-  ]);
+  const activeTrip = busData?.trips?.find((trip) => {
+    const status = trip.status?.trim().toLowerCase();
+    return status === "active" || status === "ongoing" || trip.isActive;
+  }) ?? busData?.trips?.[0];
 
-  // ✅ Handle status change
-  const handleStatusChange = (id: number) => {
-    setTrips((prev) =>
-      prev.map((trip) => {
-        if (trip.id === id) {
-          if (trip.status === "start") return { ...trip, status: "ongoing" };
-          if (trip.status === "ongoing") return { ...trip, status: "finished" };
-        }
-        return trip;
-      })
-    );
+  const activeTripId = activeTrip?.id;
+
+  const refreshTodayTrips = async () => {
+    const response = await fetch(`${getApiBaseUrl()}/bus-trips/today`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        ...getAuthHeaders(),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+
+    const payload = (await response.json()) as { data?: TodayTripsResponse } | TodayTripsResponse;
+    setBusData((payload as { data?: TodayTripsResponse })?.data ?? (payload as TodayTripsResponse));
   };
 
+  const handleUpdateTripStatus = async (tripId: number | string, currentStatus?: string, isActive?: boolean) => {
+    const nextStatus = getNextStatus(currentStatus, isActive);
 
-    return (
+    try {
+      setUpdatingTripId(tripId);
+
+      const response = await fetch(`${getApiBaseUrl()}/bus-trips/${tripId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ status: toBackendStatus(nextStatus) }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      await refreshTodayTrips();
+    } catch {
+      setError("Failed to update trip status");
+    } finally {
+      setUpdatingTripId(null);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadTodayTrips = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(`${getApiBaseUrl()}/bus-trips/today`, {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            ...getAuthHeaders(),
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+
+        const payload = (await response.json()) as { data?: TodayTripsResponse } | TodayTripsResponse;
+        setBusData((payload as { data?: TodayTripsResponse })?.data ?? (payload as TodayTripsResponse));
+      } catch (fetchError) {
+        if ((fetchError as Error).name !== "AbortError") {
+          setError("Failed to load today's trips");
+          setBusData(null);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTodayTrips();
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!activeTripId) {
+      setStops([]);
+      setStopsError("");
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadTripStops = async () => {
+      try {
+        setStopsLoading(true);
+        setStopsError("");
+
+        const response = await fetch(`${getApiBaseUrl()}/bus-trips/${activeTripId}/stops`, {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            ...getAuthHeaders(),
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+
+        const payload = (await response.json()) as { data?: { stops?: TripStop[] } } | { stops?: TripStop[] };
+        const tripStops = (payload as { data?: { stops?: TripStop[] } })?.data?.stops ?? (payload as { stops?: TripStop[] })?.stops ?? [];
+        setStops(Array.isArray(tripStops) ? tripStops : []);
+      } catch (fetchError) {
+        if ((fetchError as Error).name !== "AbortError") {
+          setStopsError("Failed to load trip stops");
+          setStops([]);
+        }
+      } finally {
+        setStopsLoading(false);
+      }
+    };
+
+    loadTripStops();
+
+    return () => controller.abort();
+  }, [activeTripId]);
+
+  const trips = busData?.trips ?? [];
+  const registrationNumber = busData?.registrationNumber ?? "—";
+  const todayDay = busData?.todayDay ?? "Today";
+  const activeTripLabel = activeTrip ? `${activeTrip.tripNumber ?? activeTrip.id} - ${activeTrip.routeName ?? "Trip"}` : "No active trip";
+
+  return (
     <section className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      {/* LEFT SIDE - TABLE */}
       <div className="bus-trip-table-wrap lg:col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-        
         <div className="bus-trip-header border-b border-slate-200 bg-linear-to-r from-slate-50 to-white px-4 py-3.5">
           <h2 className="text-base font-semibold text-slate-800">
-            Bus NA-1876 — Active Schedule
+            Bus {registrationNumber} - {todayDay} Trips
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Manage trip timing, direction, and live progress from one place.
+            Live schedule loaded from the backend bus-trips endpoint.
           </p>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-175 border-collapse text-[13px]">
-            <thead className="bg-slate-900 text-slate-100">
-              <tr className="text-left">
-                <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">
-                  Trip
-                </th>
-                <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">
-                  Direction
-                </th>
-                <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">
-                  Departure
-                </th>
-                <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">
-                  Arrival
-                </th>
-                <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">
-                  Days
-                </th>
-                <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">
-                  Status
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {trips.map((trip, index) => (
-                <tr
-                  key={trip.id}
-                  className={`bus-trip-row border-b border-slate-100 transition-colors hover:bg-sky-50/70 ${
-                    index % 2 === 0 ? "bg-white" : "bg-slate-50/40"
-                  }`}
-                >
-                  <td className="px-4 py-3">
-                    <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-900 px-2 text-[11px] font-semibold text-white shadow-sm">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                  </td>
-                  <td className="bus-trip-direction px-4 py-3 font-medium text-slate-800">
-                    {trip.direction}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{trip.departure}</td>
-                  <td className="px-4 py-3 text-slate-600">{trip.arrival}</td>
-                  <td className="px-4 py-3 text-slate-600">{trip.days}</td>
-
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleStatusChange(trip.id)}
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 ${
-                        trip.status === "finished"
-                          ? "bg-blue-700 hover:bg-blue-800"
-                          : trip.status === "ongoing"
-                          ? "bg-amber-500 hover:bg-amber-600"
-                          : "bg-emerald-600 hover:bg-emerald-700"
-                      }`}
-                    >
-                      {trip.status === "start"
-                        ? "Start"
-                        : trip.status === "ongoing"
-                        ? "Ongoing"
-                        : "Finished"}
-                    </button>
-                  </td>
+          {loading ? (
+            <div className="px-4 py-8 text-sm text-slate-500">Loading today's trips...</div>
+          ) : error ? (
+            <div className="px-4 py-8 text-sm text-rose-600">{error}</div>
+          ) : trips.length === 0 ? (
+            <div className="px-4 py-8 text-sm text-slate-500">No trips found for today.</div>
+          ) : (
+            <table className="w-full min-w-175 border-collapse text-[13px]">
+              <thead className="bg-slate-900 text-slate-100">
+                <tr className="text-left">
+                  <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">Trip</th>
+                  <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">Route</th>
+                  <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">Direction</th>
+                  <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">Departure</th>
+                  <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">Arrival</th>
+                  <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px]">Status</th>
+                  <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-[10px] text-center">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {trips.map((trip, index) => {
+                  const status = normalizeStatus(trip.status, trip.isActive);
+
+                  return (
+                    <tr
+                      key={trip.id}
+                      className={`bus-trip-row border-b border-slate-100 transition-colors hover:bg-sky-50/70 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
+                    >
+                      <td className="px-4 py-3">
+                        <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-900 px-2 text-[11px] font-semibold text-white shadow-sm">
+                          {String(trip.tripNumber ?? index + 1).padStart(2, "0")}
+                        </span>
+                      </td>
+                      <td className="bus-trip-direction px-4 py-3 font-medium text-slate-800">
+                        {trip.routeName ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{trip.direction ?? "—"}</td>
+                      <td className="px-4 py-3 text-slate-600">{formatTime(trip.departureTime)}</td>
+                      <td className="px-4 py-3 text-slate-600">{formatTime(trip.arrivalTime)}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold text-white shadow-sm ${
+                            status === "finished"
+                              ? "bg-blue-700"
+                              : status === "ongoing"
+                              ? "bg-amber-500"
+                              : "bg-emerald-600"
+                          }`}
+                        >
+                          {status === "finished" ? "Finished" : status === "ongoing" ? "Ongoing" : "Scheduled"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          disabled={updatingTripId === trip.id || status === "finished"}
+                          onClick={() => void handleUpdateTripStatus(trip.id, trip.status, trip.isActive)}
+                          className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {updatingTripId === trip.id
+                            ? "Updating..."
+                            : status === "finished"
+                            ? "Completed"
+                            : status === "ongoing"
+                            ? "Mark Finished"
+                            : "Start Trip"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
-      {/* RIGHT SIDE - STOP TIMELINE */}
-      <div className="bus-trip-timeline rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm lg:justify-self-end lg:w-full lg:max-w-100.5">
-        
-        <h3 className="mb-2 text-xs font-semibold text-slate-800">
-          Stop Sequence
-        </h3>
+      <div className="bus-trip-timeline rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:justify-self-end lg:w-full lg:max-w-100.5">
+        <h3 className="mb-2 text-xs font-semibold text-slate-800">Current Trip Stops</h3>
 
-        <div className="space-y-2.5">
-          {stops.map((stop) => (
-            <div key={stop.id} className="flex items-start gap-1.5 rounded-md px-1 py-1 transition-colors hover:bg-slate-50">
-              
-              {/* DOT */}
-              <div className="flex flex-col items-center">
-                <div
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    stop.status === "current"
-                      ? "bg-blue-600"
-                      : "bg-gray-300"
-                  }`}
-                />
-                <div className="h-5 w-px bg-gray-300"></div>
-              </div>
-
-              {/* TEXT */}
-              <div>
-                <p
-                  className={`text-[13px] font-medium ${
-                    stop.status === "current"
-                      ? "text-blue-600"
-                      : "text-gray-500"
-                  }`}
-                >
-                  {stop.name}
-                </p>
-
-                <p className="text-[10px] text-gray-400">
-                  {stop.status === "departed"
-                    ? "Departed"
-                    : stop.status === "current"
-                    ? "Now"
-                    : stop.time}
-                </p>
-              </div>
-
-              <div className="ml-auto pt-0.5 text-right text-[8px] font-semibold uppercase tracking-wide text-gray-400">
-                {String(stop.id).padStart(2, "0")}
-              </div>
-            </div>
-          ))}
+        <div className="mb-3 space-y-3 text-sm text-slate-600">
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Bus</p>
+            <p className="font-medium text-slate-800">{registrationNumber}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Day</p>
+            <p className="font-medium text-slate-800">{todayDay}</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Trip</p>
+            <p className="font-medium text-slate-800">{activeTripLabel}</p>
+          </div>
         </div>
-      </div>
 
+        {stopsLoading ? (
+          <div className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">Loading stops...</div>
+        ) : stopsError ? (
+          <div className="rounded-lg bg-rose-50 px-3 py-3 text-sm text-rose-600">{stopsError}</div>
+        ) : stops.length === 0 ? (
+          <div className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">No stops available for this trip.</div>
+        ) : (
+          <div className="space-y-2">
+            {stops.map((stop) => (
+              <div key={`${stop.stopId ?? stop.sequence ?? stop.stopName}`} className="flex items-start gap-2 rounded-md px-1 py-1 transition-colors hover:bg-slate-50">
+                <div className="flex flex-col items-center pt-0.5">
+                  <div
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      stop.status?.trim().toLowerCase() === "current" ? "bg-blue-600" : stop.status?.trim().toLowerCase() === "departed" ? "bg-emerald-500" : "bg-gray-300"
+                    }`}
+                  />
+                  <div className="h-5 w-px bg-gray-300" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-[13px] font-medium ${stop.status?.trim().toLowerCase() === "current" ? "text-blue-600" : "text-gray-600"}`}>
+                    {stop.stopName ?? "Stop"}
+                  </p>
+                  <p className="text-[10px] text-gray-400">
+                    {stop.status === "departed"
+                      ? "Departed"
+                      : stop.status === "current"
+                      ? "Now"
+                      : stop.estimatedArrival || stop.scheduledTime || "Scheduled"}
+                  </p>
+                </div>
+
+                <div className="pt-0.5 text-right text-[8px] font-semibold uppercase tracking-wide text-gray-400">
+                  {String(stop.sequence ?? "").padStart(2, "0")}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
