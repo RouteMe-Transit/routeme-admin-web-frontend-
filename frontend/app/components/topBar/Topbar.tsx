@@ -1,8 +1,9 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { FaCircle } from "react-icons/fa";
 import { usePathname } from "next/navigation";
+import api from "@/app/services/api";
 
 type BusInfo = {
   busId?: string;
@@ -10,6 +11,20 @@ type BusInfo = {
   routeName?: string;
   drivers?: string[];
   defaultDriver?: string;
+};
+
+type RouteOption = {
+  id: string;
+  value: string;
+  label: string;
+};
+
+type BackendRoute = {
+  id?: string | number;
+  routeName?: string;
+  routeNumber?: string;
+  from?: string;
+  to?: string;
 };
 
 type TopBarProps = {
@@ -31,6 +46,9 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
     : "passenger-topbar";
   const defaultDriver = busInfo?.defaultDriver ?? busInfo?.drivers?.[0] ?? "";
   const driverSelectKey = `${busInfo?.busId ?? "no-bus"}-${defaultDriver}`;
+  const [routes, setRoutes] = useState<RouteOption[]>([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState("all");
 
   useEffect(() => {
     try {
@@ -44,13 +62,79 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
         localStorage.setItem("currentRouteName", busInfo.routeName);
       } else if (busInfo?.routeNumber) {
         localStorage.setItem("currentRouteName", String(busInfo.routeNumber));
-      } else {
-        localStorage.removeItem("currentRouteName");
       }
     } catch (e) {
       // ignore
     }
   }, [busInfo]);
+
+  useEffect(() => {
+    if (!isPassengerLiveTracking || busInfo) {
+      return;
+    }
+
+    const loadRoutes = async () => {
+      setRoutesLoading(true);
+
+      try {
+        const response = await api.get("/routes", {
+          params: { limit: 200 },
+        });
+
+        const payload = response.data?.data?.routes ?? response.data?.routes ?? response.data?.data ?? [];
+        const normalizedRoutes = Array.isArray(payload)
+          ? payload
+              .map((route: BackendRoute) => {
+                const routeNumber = route.routeNumber?.trim() ?? "";
+                const routeName = route.routeName?.trim() ?? "";
+                const fromTo = [route.from?.trim(), route.to?.trim()].filter(Boolean).join(" - ");
+                const routeLabel = routeNumber || routeName || `Route ${route.id ?? ""}`;
+                const label = fromTo ? `${routeLabel} (${fromTo})` : routeLabel;
+
+                return {
+                  id: String(route.id ?? label),
+                  value: routeNumber || routeName || String(route.id ?? label),
+                  label,
+                };
+              })
+              .filter((route) => route.value.trim().length > 0)
+          : [];
+
+        setRoutes(normalizedRoutes);
+
+        try {
+          const savedRoute = localStorage.getItem("currentRouteName");
+          if (savedRoute) {
+            setSelectedRoute(savedRoute);
+          }
+        } catch {
+          // ignore localStorage issues
+        }
+      } catch {
+        setRoutes([]);
+      } finally {
+        setRoutesLoading(false);
+      }
+    };
+
+    loadRoutes();
+  }, [busInfo, isPassengerLiveTracking]);
+
+  const handleRouteChange = (value: string) => {
+    setSelectedRoute(value);
+
+    try {
+      if (value === "all") {
+        localStorage.removeItem("currentRouteName");
+      } else {
+        localStorage.setItem("currentRouteName", value);
+      }
+
+      window.dispatchEvent(new CustomEvent("route-selection-change", { detail: value }));
+    } catch {
+      // ignore localStorage issues
+    }
+  };
 
   return (
     <div className={`${topbarThemeClass} sticky top-0 z-10 flex h-auto min-h-16 w-full shrink-0 ${isBusRoute ? "flex-col gap-3" : "flex-col sm:flex-row sm:items-center"} justify-between overflow-x-hidden bg-white px-4 py-3 shadow sm:px-6 ${isBusRoute ? "" : "sm:h-16"}`}>
@@ -121,11 +205,20 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
                 <span className="text-green-600 font-semibold">Live</span>
               </div>
 
-              <select className="max-w-[calc(100vw-150px)] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 whitespace-nowrap sm:max-w-none sm:px-4">
-                <option>All Routes</option>
-                <option>115</option>
-                <option>120</option>
-                <option>122</option>
+              <select
+                value={selectedRoute}
+                onChange={(event) => handleRouteChange(event.target.value)}
+                className="max-w-[calc(100vw-150px)] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 whitespace-nowrap sm:max-w-none sm:px-4"
+                aria-label="Select route"
+              >
+                <option value="all">All Routes</option>
+                {routesLoading && <option value="loading" disabled>Loading routes…</option>}
+                {!routesLoading && routes.length === 0 && <option value="none" disabled>No routes available</option>}
+                {routes.map((route) => (
+                  <option key={route.id} value={route.value}>
+                    {route.label}
+                  </option>
+                ))}
               </select>
 
               <button type="button" onClick={() => window.location.reload()} className="hidden bg-[#4caf8a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3f9c79] sm:inline-flex rounded-lg">
