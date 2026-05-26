@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 
 type Bus = {
@@ -87,21 +87,61 @@ const buses: Bus[] = [
 ];
 
 export default function LiveTrackingPage() {
+  const [selectedRoute, setSelectedRoute] = useState("all");
+
+  useEffect(() => {
+    const syncSelectedRoute = () => {
+      try {
+        setSelectedRoute(localStorage.getItem("currentRouteName") ?? "all");
+      } catch {
+        setSelectedRoute("all");
+      }
+    };
+
+    const handleRouteSelectionChange = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setSelectedRoute(customEvent.detail || "all");
+    };
+
+    syncSelectedRoute();
+
+    window.addEventListener("storage", syncSelectedRoute);
+    window.addEventListener("focus", syncSelectedRoute);
+    window.addEventListener("route-selection-change", handleRouteSelectionChange as EventListener);
+
+    return () => {
+      window.removeEventListener("storage", syncSelectedRoute);
+      window.removeEventListener("focus", syncSelectedRoute);
+      window.removeEventListener("route-selection-change", handleRouteSelectionChange as EventListener);
+    };
+  }, []);
+
+  const visibleBuses = selectedRoute === "all"
+    ? buses
+    : buses.filter((bus) => bus.route === selectedRoute);
+
   return (
     <div className="min-h-dvh overflow-x-hidden bg-gray-100 p-4 sm:p-6">
       {/* Main Layout */}
       <div className="grid w-full min-w-0 grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Map Section */}
         <div className="relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl bg-white p-4 shadow lg:col-span-3">
-          <LiveTrackingMap buses={buses} />
+          <LiveTrackingMap buses={visibleBuses} />
         </div>
 
         {/* Sidebar Bus List */}
         <div className="relative min-w-0 w-full max-w-full rounded-2xl bg-white p-4 shadow">
-          <h2 className="text-lg font-semibold mb-4">Buses Near You</h2>
+          <h2 className="mb-2 text-lg font-semibold">Buses Near You</h2>
+          <p className="mb-4 text-sm text-gray-500">
+            {selectedRoute === "all" ? "Showing all routes" : `Showing route ${selectedRoute}`}
+          </p>
 
           <div className="space-y-3 max-h-125 overflow-y-auto">
-            {buses.map((bus) => (
+            {visibleBuses.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                No buses found for the selected route.
+              </div>
+            ) : visibleBuses.map((bus) => (
               <div
                 key={bus.id}
                 className="min-w-0 w-full rounded-lg border p-3 transition hover:shadow-sm"
