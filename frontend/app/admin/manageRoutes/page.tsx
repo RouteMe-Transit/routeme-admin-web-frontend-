@@ -673,7 +673,8 @@ export default function AdminManageRoutes() {
 
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-        <div className="grid grid-cols-[100px_140px_240px_80px_80px_110px_110px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+        <div className="responsive-table">
+          <div className="min-w-max grid grid-cols-[100px_140px_240px_80px_80px_110px_110px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
           <div>Route ID</div><div>Name</div><div>From → To</div><div>Stops</div>
           <div>Buses</div><div>Avg Time</div><div>Status</div><div className="text-center">Actions</div>
         </div>
@@ -741,7 +742,7 @@ export default function AdminManageRoutes() {
           })
         )}
       </div>
-
+      </div>
       {/* ADD / EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

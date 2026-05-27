@@ -377,17 +377,17 @@ export default function AdminManageUsers() {
 
       {/* ── TABLE ── */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-
-        {/* Header */}
-        <div className="grid grid-cols-[110px_180px_220px_130px_90px_100px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
-          <div>User ID</div>
-          <div>Name</div>
-          <div>Email</div>
-          <div>Phone</div>
-          <div>Joined</div>
-          <div>Status</div>
-          <div className="text-center">Actions</div>
-        </div>
+        <div className="responsive-table">
+          {/* Header */}
+          <div className="grid min-w-max grid-cols-[110px_180px_220px_130px_90px_100px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+            <div>User ID</div>
+            <div>Name</div>
+            <div>Email</div>
+            <div>Phone</div>
+            <div>Joined</div>
+            <div>Status</div>
+            <div className="text-center">Actions</div>
+          </div>
 
         {/* Body */}
         {loading ? (
@@ -495,6 +495,7 @@ export default function AdminManageUsers() {
             </div>
           ))
         )}
+      </div>
       </div>
 
       {/* ── ADD / EDIT MODAL ── */}

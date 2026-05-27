@@ -400,8 +400,9 @@ export default function AdminManageTrips() {
 
       {/* ── TABLE ── */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+        <div className="responsive-table">
 
-        <div className="grid grid-cols-[110px_220px_130px_100px_100px_100px_150px_116px] bg-[#f8fafc] px-5 pr-2.5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+        <div className="min-w-max grid grid-cols-[110px_220px_130px_100px_100px_100px_150px_116px] bg-[#f8fafc] px-5 pr-2.5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
           <div>Trip ID</div>
           <div>Route</div>
           <div>Bus</div>
@@ -503,7 +504,7 @@ export default function AdminManageTrips() {
           ))
         )}
       </div>
-
+      </div>
       {/* ══════════════════════════════════════════════════════════════════════
           ADD / EDIT MODAL
       ══════════════════════════════════════════════════════════════════════ */}

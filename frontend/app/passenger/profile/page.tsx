@@ -465,51 +465,50 @@ export default function PassengerProfilePage() {
                             <img src={editData.image} className="w-20 h-20 rounded-full ml-40 border " />
 
                             {/* Name */}
-                            <div className="flex gap-3">
-                                <label className="text-sm font-medium text-gray-700">First Name:</label>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <label className="min-w-[120px] text-sm font-medium text-gray-700">First Name:</label>
                                 <input
                                     type="text"
                                     value={editData.firstName}
                                     onChange={(e) => setEditData({ ...editData, firstName: e.target.value })}
                                     placeholder="First Name"
-                                    className="w-[300px]  px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 
-                            <div className="flex gap-3">
-                                <label className="text-sm font-medium text-gray-700">Last Name:</label>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <label className="min-w-[120px] text-sm font-medium text-gray-700">Last Name:</label>
 
                                 <input
                                     type="text"
                                     value={editData.lastName}
                                     onChange={(e) => setEditData({ ...editData, lastName: e.target.value })}
                                     placeholder="Last Name"
-                                    className="w-[301px] px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 
                             {/* Email */}
-                            <div className="flex gap-11">
-                                <label className="text-sm font-medium text-gray-700">Email:</label>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <label className="min-w-[120px] text-sm font-medium text-gray-700">Email:</label>
                                 <input
                                     type="email"
                                     value={editData.email}
                                     onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                                     placeholder="Email"
-                                    className="w-[300px] px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 
-
                             {/* Phone */}
-                            <div className="flex gap-3">
-                                <label className="text-sm font-medium text-gray-700">Phone Number:</label>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <label className="min-w-[120px] text-sm font-medium text-gray-700">Phone Number:</label>
                                 <input
                                     type="text"
                                     value={editData.phone}
                                     onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
                                     placeholder="Phone Number"
-                                    className="w-[268px] px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 

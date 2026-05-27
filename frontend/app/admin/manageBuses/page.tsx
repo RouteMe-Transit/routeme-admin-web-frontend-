@@ -495,9 +495,10 @@ export default function AdminManageBuses() {
 
       {/* ── TABLE ── */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+        <div className="responsive-table">
 
         {/* Header */}
-        <div className="grid grid-cols-[110px_140px_130px_160px_70px_120px_110px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+        <div className="min-w-max grid grid-cols-[110px_140px_130px_160px_70px_120px_110px_116px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
           <div>Bus ID</div>
           <div>Plate</div>
           <div>Type</div>
@@ -589,6 +590,7 @@ export default function AdminManageBuses() {
             );
           })
         )}
+      </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
