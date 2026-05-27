@@ -258,16 +258,17 @@ export default function AdminManageStopsPage() {
 
       {/* ── TABLE ── */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-
-        {/* Header */}
-        <div className="grid grid-cols-[60px_1fr_120px_120px_110px_110px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
-          <div>Stop ID</div>
-          <div className="ml-5">Stop Name</div>
-          <div>Latitude</div>
-          <div>Longitude</div>
-          <div>Status</div>
-          <div className="text-center">Actions</div>
-        </div>
+        <div className="overflow-x-auto">
+          <div className="min-w-max">
+            {/* Header */}
+            <div className="grid grid-cols-[60px_1fr_120px_120px_110px_110px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
+              <div>Stop ID</div>
+              <div className="ml-5">Stop Name</div>
+              <div>Latitude</div>
+              <div>Longitude</div>
+              <div>Status</div>
+              <div className="text-center">Actions</div>
+            </div>
 
         {/* Body */}
         {loading ? (
@@ -339,6 +340,8 @@ export default function AdminManageStopsPage() {
           ))
         )}
       </div>
+    </div>
+  </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
           ADD / EDIT MODAL

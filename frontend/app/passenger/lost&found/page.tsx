@@ -125,8 +125,8 @@ export default function LostFound() {
       </div>
 
       {/* Search + Report */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center bg-gray-100 px-4 rounded-lg w-[60%]">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex w-full max-w-xl items-center bg-gray-100 px-4 rounded-lg">
           <span className="text-gray-500 mr-3 text-lg">🔍</span>
           <input
             type="text"
@@ -136,6 +136,7 @@ export default function LostFound() {
         </div>
 
         <button
+          className="w-full rounded-lg bg-green-500 px-6 py-3 text-white sm:w-auto"
           onClick={() => setShowModal(true)}
           className="bg-green-500 text-white px-6 py-3 rounded-lg"
         >

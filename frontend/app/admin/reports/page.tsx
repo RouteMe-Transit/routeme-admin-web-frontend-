@@ -55,30 +55,34 @@ export default function AdminReportsPage() {
   return (
     <section className="p-6 space-y-6">
       
-      <div className="flex  items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Search */}
-      <div className="w-1/3">
-        <input
-          type="text"
-          placeholder="Search Reports..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full border border-slate-300 bg-white p-2 rounded-md"
-        />
-      </div>
-      <label className="border w-30 h-10 rounded-md bg-[#122843] text-white font-bold flex items-center justify-center">
-                    Total: {reports.length}
-                </label>
+        <div className="w-full max-w-md">
+          <input
+            type="text"
+            placeholder="Search Reports..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full border border-slate-300 bg-white p-2 rounded-md"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="rounded-md bg-[#122843] px-4 py-2 text-sm font-bold text-white">
+            Total: {reports.length}
+          </span>
+        </div>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-        <div className="grid grid-cols-4 bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-600 border-b uppercase tracking-wide">
-          <div>Report ID</div>
-          <div>Bus Number</div>
-          <div>Report</div>
-          <div className="text-center">Action</div>
-        </div>
+        <div className="overflow-x-auto">
+          <div className="min-w-max">
+            <div className="grid grid-cols-4 gap-4 bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-600 border-b uppercase tracking-wide">
+              <div>Report ID</div>
+              <div>Bus Number</div>
+              <div>Report</div>
+              <div className="text-center">Action</div>
+            </div>
 
         {filteredReports.length > 0 ? (
           filteredReports.map((item, index) => {
@@ -97,7 +101,7 @@ export default function AdminReportsPage() {
 
                 <div>{item.busNumber}</div>
 
-                <div className="max-w-[250px]">
+                <div className="max-w-62.5">
                   <p className="truncate text-sm text-gray-700" title={item.report}>
                     {item.report}
                   </p>
@@ -141,6 +145,8 @@ export default function AdminReportsPage() {
           <div className="text-center py-20 text-gray-400 text-sm">No reports found</div>
         )}
       </div>
+    </div>
+  </div>
 
       {/* View Modal */}
       {selectedReport && (
@@ -171,7 +177,7 @@ export default function AdminReportsPage() {
                 <span className="font-semibold">Report:</span>
               </p>
 
-              <p className="bg-gray-100 p-3 rounded break-words whitespace-pre-wrap max-h-60 overflow-y-auto">
+              <p className="bg-gray-100 p-3 rounded wrap-break-word whitespace-pre-wrap max-h-60 overflow-y-auto">
                 {selectedReport.report}
               </p>
 

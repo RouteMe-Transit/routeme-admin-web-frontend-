@@ -226,7 +226,8 @@ export default function AdminComplaints() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+        <div className="responsive-table">
+          <div className="min-w-max grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
           <div>ID</div>
           <div>Passenger</div>
           <div>Category</div>

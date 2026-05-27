@@ -201,8 +201,8 @@ export default function AdminFeedback() {
       </div>
 
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div>
-          <div className="grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+        <div className="responsive-table">
+          <div className="min-w-max grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
             <div>ID</div>
             <div>Name</div>
             <div>Category</div>
@@ -250,11 +250,12 @@ export default function AdminFeedback() {
           )}
         </div>
       </div>
+      </div>
 
       {/* MODAL */}
       {selectedFeedback && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-          <div className="w-105 rounded-xl bg-white p-6 shadow-lg">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-lg">
             <h2 className="mb-4 text-lg font-bold">Feedback Details</h2>
 
             <p><b>ID:</b> {selectedFeedback.displayId ?? selectedFeedback.id}</p>
