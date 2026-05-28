@@ -51,9 +51,10 @@ export default function SignupPage() {
       alert("Signup successful!");
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError<any>;
+        const axiosError = error as AxiosError<unknown>;
+        const responseData = axiosError.response?.data as { message?: string } | undefined;
 
-        alert((axiosError.response?.data as any)?.message || "Signup failed");
+        alert(responseData?.message || "Signup failed");
       } else {
         alert("Unexpected error occurred");
       }
@@ -71,14 +72,14 @@ export default function SignupPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* First + Last Name */}
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row">
             <input
               type="text"
               name="firstName"
               placeholder="First Name"
               required
               onChange={handleChange}
-              className="w-1/2 px-3 py-2 border rounded-lg"
+              className="w-full sm:w-1/2 px-3 py-2 border rounded-lg"
             />
             <input
               type="text"
@@ -86,7 +87,7 @@ export default function SignupPage() {
               placeholder="Last Name"
               required
               onChange={handleChange}
-              className="w-1/2 px-3 py-2 border rounded-lg"
+              className="w-full sm:w-1/2 px-3 py-2 border rounded-lg"
             />
           </div>
 
@@ -157,7 +158,7 @@ export default function SignupPage() {
       {/* SUCCESS MODAL */}
       {showSuccess && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-          <div className="bg-white p-10 rounded-2xl shadow-xl text-center w-[350px]">
+          <div className="bg-white p-10 rounded-2xl shadow-xl text-center w-full max-w-md mx-4 sm:mx-auto">
             <h2 className="text-2xl font-bold mb-4">
               Account Created Successfully!
             </h2>

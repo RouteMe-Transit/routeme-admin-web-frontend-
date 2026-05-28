@@ -99,11 +99,10 @@ export default function LoginPage() {
       }, 1000);
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError<any>;
+        const axiosError = error as AxiosError<unknown>;
+        const responseData = axiosError.response?.data as { message?: string } | undefined;
 
-        toast.error(
-          (axiosError.response?.data as any)?.message || "Login failed",
-        );
+        toast.error(responseData?.message || "Login failed");
       } else {
         toast.error("Unexpected error occurred");
       }
@@ -119,7 +118,7 @@ export default function LoginPage() {
         </h1>
 
         {/* Role Panels */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className="grid grid-cols-1 gap-3 mb-8 sm:grid-cols-3">
           {roles.map((r) => (
             <button
               key={r}
