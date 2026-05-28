@@ -50,8 +50,11 @@ const CATEGORIES = [
   "Schedule",
 ];
 
+// ── FIX: Use the same env var as AdminPublishNews, strip /api/v1 suffix ───────
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1")
+  .replace(/\/api\/v1$/, "");
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
 /**
  * Converts a stored image path like "/uploads/news/news-xxx.jpg"
@@ -479,12 +482,10 @@ function ArticleModal({
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "#1b3a5c";
+              (e.currentTarget as HTMLButtonElement).style.background = "#1b3a5c";
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "#122843";
+              (e.currentTarget as HTMLButtonElement).style.background = "#122843";
             }}
           >
             Close
@@ -510,7 +511,8 @@ export default function PassengerNewsFeed() {
   const fetchNews = useCallback(async () => {
     try {
       setLoading(true);
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+
+      // FIX: Use module-level API_BASE (same env var as AdminPublishNews)
       const params: Record<string, string | number | boolean> = {
         page,
         limit: LIMIT,
@@ -518,7 +520,7 @@ export default function PassengerNewsFeed() {
       };
       if (activeCategory !== "All") params.category = activeCategory;
 
-      const response = await axios.get(`${apiBase}/api/v1/news`, { params });
+      const response = await axios.get(`${API_BASE}/api/v1/news`, { params });
 
       // Normalize response shape
       const rawData = response.data?.data ?? response.data;
@@ -665,8 +667,7 @@ export default function PassengerNewsFeed() {
                 borderRadius: "999px",
                 fontSize: "11px",
                 fontWeight: 700,
-                border:
-                  activeCategory === cat ? "none" : "1.5px solid #e5e7eb",
+                border: activeCategory === cat ? "none" : "1.5px solid #e5e7eb",
                 background: activeCategory === cat ? "#122843" : "#fff",
                 color: activeCategory === cat ? "#fff" : "#6b7280",
                 cursor: "pointer",
@@ -767,28 +768,26 @@ export default function PassengerNewsFeed() {
                   Previous
                 </button>
 
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                  (p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPage(p)}
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "8px",
-                        border: p === page ? "none" : "1.5px solid #e5e7eb",
-                        background: p === page ? "#4CAF8A" : "#fff",
-                        color: p === page ? "#fff" : "#374151",
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      {p}
-                    </button>
-                  )
-                )}
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "8px",
+                      border: p === page ? "none" : "1.5px solid #e5e7eb",
+                      background: p === page ? "#4CAF8A" : "#fff",
+                      color: p === page ? "#fff" : "#374151",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
 
                 <button
                   disabled={page >= totalPages}

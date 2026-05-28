@@ -10,6 +10,7 @@ export const topbarConfig = {
   "/admin/reports": { title: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="w-10 h-10" /> },
   "/admin/complaints": { title: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaints" className="w-10 h-10" /> },
   "/admin/feedback": { title: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="w-10 h-10" /> },
+  "/admin/tripSchedule": { title: "Manage Trips", icon: <img src="/icons/trip.png" alt="Manage Trips" className="w-10 h-10" /> },
 
   "/bus/trip": { title: "Trip", icon: <img src="/icons/trip.png" alt="Trip" className="w-10 h-10" /> },
   "/bus/alerts": { title: "Send Alerts", icon: <img src="/icons/alarm.png" alt="Send Alerts" className="w-10 h-10" /> },
