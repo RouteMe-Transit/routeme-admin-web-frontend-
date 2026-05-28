@@ -1,14 +1,15 @@
 "use client";
+
 import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
-import axios from "axios";
 import toast from "react-hot-toast";
-import Swal from "sweetalert2";
 import { z, ZodIssue } from "zod";
-import { IoSearch, IoAddCircle, IoLocationSharp } from "react-icons/io5";
+import { IoAddCircle, IoLocationSharp } from "react-icons/io5";
 import { FiMapPin, FiCheckCircle, FiAlertOctagon, FiEdit2 } from "react-icons/fi";
-import { MdLocationOn, MdEditLocationAlt } from "react-icons/md";
+import { MdEditLocationAlt } from "react-icons/md";
 import { TbMapPin } from "react-icons/tb";
+import { FaMagnifyingGlass, FaXmark } from "react-icons/fa6";
+import { IoCheckmarkCircle, IoBan } from "react-icons/io5";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type StopsMapPickerProps = {
@@ -44,17 +45,22 @@ type StopFormValues = {
 
 type FieldErrors = Record<string, string>;
 
-// ─── Axios instance ───────────────────────────────────────────────────────────
+// ─── API helper ───────────────────────────────────────────────────────────────
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
-const api = axios.create({ baseURL: BASE });
-
-api.interceptors.request.use((config) => {
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  if (token) config.headers["Authorization"] = `Bearer ${token}`;
-  return config;
-});
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message ?? "Request failed");
+  return json.data as T;
+}
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 const latRegex = /^-?([0-8]?[0-9](\.\d+)?|90(\.0+)?)$/;
@@ -62,37 +68,9 @@ const lngRegex = /^-?((1[0-7][0-9]|[0-9]{1,2})(\.\d+)?|180(\.0+)?)$/;
 
 const stopFormSchema = z.object({
   stopName:  z.string().min(1, "Stop name is required").min(3, "Stop name must be at least 3 characters").max(150, "Stop name must be under 150 characters"),
-  latitude:  z.string().min(1, "Latitude is required").regex(latRegex,  "Enter a valid latitude between -90 and 90"),
+  latitude:  z.string().min(1, "Latitude is required").regex(latRegex, "Enter a valid latitude between -90 and 90"),
   longitude: z.string().min(1, "Longitude is required").regex(lngRegex, "Enter a valid longitude between -180 and 180"),
 });
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const inputBase   = "w-full h-10 border rounded-lg px-3 text-sm outline-none transition bg-white text-black";
-const inputNormal = `${inputBase} border-gray-200 focus:border-[#4CAF8A] focus:ring-1 focus:ring-[#4CAF8A]`;
-const inputError  = `${inputBase} border-red-400 focus:border-red-500 focus:ring-1 focus:ring-red-300 bg-red-50/30`;
-const labelCls    = "block text-[10px] uppercase font-black text-gray-400 mb-1 tracking-widest";
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-function FieldError({ msg }: { msg?: string }) {
-  if (!msg) return null;
-  return <p className="mt-1 text-[11px] text-red-500 font-semibold">{msg}</p>;
-}
-
-function StatCard({ icon, bg, value, label, color }: {
-  icon: React.ReactNode; bg: string; value: number; label: string; color: string;
-}) {
-  return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
-      <div className={`w-14 h-14 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
-        {icon}
-      </div>
-      <div>
-        <p className={`text-3xl font-black tracking-tight ${color}`}>{value}</p>
-        <p className="text-sm text-gray-400 font-semibold mt-0.5">{label}</p>
-      </div>
-    </div>
-  );
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const flattenZodErrors = (issues: ZodIssue[]): FieldErrors => {
@@ -104,19 +82,69 @@ const flattenZodErrors = (issues: ZodIssue[]): FieldErrors => {
 const emptyForm = (): StopFormValues => ({ stopName: "", latitude: "", longitude: "" });
 
 function formatStopId(rawId: number | string | null | undefined, prefix = "ST", width = 4): string {
-  if (rawId === null || rawId === undefined) {
-    return `${prefix}${"0".repeat(width)}`;
-  }
-
+  if (rawId === null || rawId === undefined) return `${prefix}${"0".repeat(width)}`;
   const text = String(rawId).trim();
   const trailingDigits = text.match(/(\d+)$/)?.[1] ?? text.replace(/\D/g, "");
-
-  if (trailingDigits) {
-    return `${prefix}${trailingDigits.padStart(width, "0")}`;
-  }
-
+  if (trailingDigits) return `${prefix}${trailingDigits.padStart(width, "0")}`;
   return text;
 }
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-xs text-red-500 font-semibold">{msg}</p>;
+}
+
+function StatCard({ icon, bg, value, label, color }: {
+  icon: React.ReactNode; bg: string; value: number; label: string; color: string;
+}) {
+  return (
+    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
+      <div className={`w-12 h-12 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
+        {icon}
+      </div>
+      <div>
+        <p className={`text-2xl font-extrabold tracking-tight ${color}`}>{value}</p>
+        <p className="text-xs text-gray-500 font-semibold mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Confirm modal ────────────────────────────────────────────────────────────
+function ConfirmModal({
+  open, title, message, confirmLabel, confirmClass, onCancel, onConfirm,
+}: {
+  open: boolean; title: string; message: string;
+  confirmLabel: string; confirmClass: string;
+  onCancel: () => void; onConfirm: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="relative mx-4 w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
+        <h3 className="mb-2 text-lg font-bold text-gray-800">{title}</h3>
+        <p className="mb-5 text-sm text-gray-600">{message}</p>
+        <div className="flex justify-end gap-3">
+          <button onClick={onCancel}
+            className="rounded-md bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300">
+            Cancel
+          </button>
+          <button onClick={onConfirm}
+            className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${confirmClass}`}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Input styles ─────────────────────────────────────────────────────────────
+const inputBase   = "w-full h-10 border rounded-md px-2 text-sm outline-none transition bg-white text-black";
+const inputNormal = `${inputBase} border-[#828282]/70 focus:border-[#4CAF8A] focus:ring-1 focus:ring-[#4CAF8A]`;
+const inputError  = `${inputBase} border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-300 bg-red-50/20`;
+const labelCls    = "block mb-2 font-semibold text-sm text-gray-700";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AdminManageStopsPage() {
@@ -129,13 +157,19 @@ export default function AdminManageStopsPage() {
   const [loading,     setLoading]     = useState(true);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [apiError,    setApiError]    = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
 
-  // ── Load stops ──────────────────────────────────────────────────────────────
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; message: string;
+    confirmLabel: string; confirmClass: string; onConfirm: () => void;
+  }>({ open: false, title: "", message: "", confirmLabel: "", confirmClass: "", onConfirm: () => {} });
+
+  // ── Load stops ─────────────────────────────────────────────────────────────
   const loadStops = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await api.get<{ data: { stops: Stop[] } }>("/stops");
-      setStops(data.data.stops);
+      const res = await apiFetch<{ stops: Stop[] }>("/stops");
+      setStops(res.stops ?? []);
     } catch {
       // keep existing state
     } finally {
@@ -172,43 +206,44 @@ export default function AdminManageStopsPage() {
     const result = stopFormSchema.safeParse(formData);
     if (!result.success) { setFieldErrors(flattenZodErrors(result.error.issues)); return; }
     setFieldErrors({}); setApiError("");
+    setSubmitting(true);
     try {
       if (editId !== null) {
-        await api.put(`/stops/${editId}`, formData);
+        await apiFetch(`/stops/${editId}`, { method: "PUT", body: JSON.stringify(formData) });
         toast.success("Stop updated successfully");
       } else {
-        await api.post("/stops", formData);
+        await apiFetch("/stops", { method: "POST", body: JSON.stringify(formData) });
         toast.success(`${formData.stopName} added successfully`);
       }
       await loadStops();
       setFormData(emptyForm()); setShowModal(false); setEditId(null);
-    } catch (err: any) {
-      const msg = err.response?.data?.message ?? err.message ?? "Save failed";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Save failed";
       setApiError(msg); toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleToggleActive = async (id: number) => {
-    const stopToUpdate = stops.find((s) => s.id === id);
-    if (!stopToUpdate) return;
-    const nextActive = !stopToUpdate.isActive;
-    const confirmed = await Swal.fire({
+  const handleToggleActive = (stop: Stop) => {
+    const nextActive = !stop.isActive;
+    setConfirmState({
+      open: true,
       title: `${nextActive ? "Activate" : "Suspend"} this stop?`,
-      text: `"${stopToUpdate.stopName}" will be marked as ${nextActive ? "active" : "suspended"}.`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: nextActive ? "#16a34a" : "#d97706",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: `Yes, ${nextActive ? "activate" : "suspend"}`,
+      message: `"${stop.stopName}" will be marked as ${nextActive ? "active" : "suspended"}.`,
+      confirmLabel: `Yes, ${nextActive ? "activate" : "suspend"}`,
+      confirmClass: nextActive ? "bg-emerald-500 hover:bg-emerald-600" : "bg-red-500 hover:bg-red-600",
+      onConfirm: async () => {
+        setConfirmState((s) => ({ ...s, open: false }));
+        try {
+          await apiFetch(`/stops/${stop.id}/toggle`, { method: "PATCH" });
+          await loadStops();
+          toast.success(`"${stop.stopName}" ${nextActive ? "activated" : "suspended"}`);
+        } catch {
+          toast.error("Failed to update stop status");
+        }
+      },
     });
-    if (!confirmed.isConfirmed) return;
-    try {
-      await api.patch(`/stops/${id}/toggle`);
-      await loadStops();
-      toast.success(`"${stopToUpdate.stopName}" ${nextActive ? "activated" : "suspended"}`);
-    } catch {
-      toast.error("Failed to update stop status");
-    }
   };
 
   const filteredStops = stops.filter((s) =>
@@ -220,168 +255,157 @@ export default function AdminManageStopsPage() {
 
   // ════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="p-6 bg-[#f5f7fa] min-h-full">
+    <>
+      <section className="p-6">
 
-      {/* ── STATS ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-        <StatCard
-          icon={<IoLocationSharp className="w-6 h-6 text-blue-500" />}
-          bg="bg-blue-50" value={totalStops} label="Total Stops" color="text-blue-600" />
-        <StatCard
-          icon={<FiCheckCircle className="w-6 h-6 text-emerald-500" />}
-          bg="bg-emerald-50" value={activeStops} label="Active Stops" color="text-emerald-600" />
-        <StatCard
-          icon={<FiAlertOctagon className="w-6 h-6 text-amber-500" />}
-          bg="bg-amber-50" value={inactiveStops} label="Suspended Stops" color="text-amber-600" />
-      </div>
-
-      {/* ── TOOLBAR ── */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 w-72 shadow-sm">
-          <IoSearch className="w-4 h-4 text-gray-400 shrink-0" />
-          <input
-            type="text"
-            placeholder="Search stops..."
-            className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        {/* ── STATS ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <StatCard
+            icon={<IoLocationSharp className="w-5 h-5 text-blue-500"    />}
+            bg="bg-blue-50"    value={totalStops}    label="Total Stops"      color="text-blue-600"    />
+          <StatCard
+            icon={<FiCheckCircle  className="w-5 h-5 text-emerald-500" />}
+            bg="bg-emerald-50" value={activeStops}   label="Active Stops"     color="text-emerald-600" />
+          <StatCard
+            icon={<FiAlertOctagon className="w-5 h-5 text-amber-500"   />}
+            bg="bg-amber-50"   value={inactiveStops} label="Suspended Stops"  color="text-amber-600"   />
         </div>
-        <button
-          onClick={openAddModal}
-          className="ml-auto h-10 bg-[#f5a623] hover:bg-[#e09510] active:scale-95 text-white font-bold px-5 rounded-xl transition-all shadow-sm text-sm flex items-center gap-2"
-        >
-          <IoAddCircle className="w-4 h-4" />
-          Add Stop
-        </button>
-      </div>
 
-      {/* ── TABLE ── */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-        <div className="overflow-x-auto">
-          <div className="min-w-max">
-            {/* Header */}
-            <div className="grid grid-cols-[60px_1fr_120px_120px_110px_110px] bg-[#f8fafc] px-5 py-3 text-[11px] font-black text-gray-500 border-b uppercase tracking-widest">
-              <div>Stop ID</div>
-              <div className="ml-5">Stop Name</div>
-              <div>Latitude</div>
-              <div>Longitude</div>
-              <div>Status</div>
-              <div className="text-center">Actions</div>
+        {/* ── TOOLBAR ── */}
+        <div className="rounded-xl border border-gray-100 mb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-white border border-[#828282]/40 rounded-lg px-3 py-2 w-80 shadow-sm">
+              <FaMagnifyingGlass className="w-4 h-4 opacity-50" aria-hidden="true" />
+              <input
+                type="text"
+                placeholder="Search stops..."
+                className="flex-1 text-sm bg-transparent outline-none text-black"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
-
-        {/* Body */}
-        {loading ? (
-          <div className="flex items-center justify-center py-24 gap-3 text-gray-400">
-            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <span className="text-sm font-semibold">Loading stops…</span>
-          </div>
-        ) : filteredStops.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-gray-400 gap-2">
-            <FiMapPin className="w-8 h-8 opacity-30" />
-            <p className="text-sm font-semibold">No stops found.</p>
-          </div>
-        ) : (
-          filteredStops.map((stop, idx) => (
-            <div
-              key={stop.id}
-              className={`grid grid-cols-[60px_1fr_120px_120px_110px_110px] items-center px-5 py-3.5 border-b transition-colors duration-150 ${
-                idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"
-              } hover:bg-blue-50/30`}
+            <button
+              onClick={openAddModal}
+              className="ml-auto h-10 bg-[#f5a623] hover:bg-[#e09510] active:scale-95 text-white font-bold px-5 rounded-xl transition-all shadow-sm text-sm flex items-center gap-2"
             >
-              <div className="font-mono text-[11px] font-bold text-gray-400 tracking-wider">
-                {formatStopId(stop.id)}
+              <IoAddCircle className="w-4 h-4" />
+              Add Stop
+            </button>
+          </div>
+        </div>
+
+        {/* ── TABLE ── */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="overflow-x-auto md:overflow-x-visible">
+            <div className="min-w-max md:min-w-full">
+
+              {/* Header */}
+              <div className="grid grid-cols-[100px_1fr_130px_130px_100px_116px] bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-700 border-b uppercase">
+                <div>Stop ID</div>
+                <div className="ml-2">Stop Name</div>
+                <div>Latitude</div>
+                <div>Longitude</div>
+                <div>Status</div>
+                <div className="text-center">Actions</div>
               </div>
 
-              <div className="flex items-center gap-2 min-w-0 ml-5">
-                
-                <span className="font-semibold text-gray-800 text-sm truncate">{stop.stopName}</span>
-              </div>
+              {/* Body */}
+              {loading ? (
+                <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading stops...</div>
+              ) : filteredStops.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500 text-sm">No stops found</div>
+              ) : (
+                filteredStops.map((stop) => (
+                  <div key={stop.id}
+                    className="grid grid-cols-[100px_1fr_130px_130px_100px_116px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition">
 
-              <div className="font-mono text-xs text-gray-500">{stop.latitude}</div>
-              <div className="font-mono text-xs text-gray-500">{stop.longitude}</div>
+                    <div className="font-semibold text-[#122843] whitespace-nowrap">
+                      {formatStopId(stop.id)}
+                    </div>
 
-              <div>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide ${
-                  stop.isActive
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${stop.isActive ? "bg-emerald-500" : "bg-amber-500"}`} />
-                  {stop.isActive ? "Active" : "Suspended"}
-                </span>
-              </div>
+                    <div className="flex items-center gap-2 min-w-0 ml-2">
+                      <span className="font-medium text-gray-800 truncate text-sm">{stop.stopName}</span>
+                    </div>
 
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  onClick={() => openEditModal(stop)}
-                  title="Edit stop"
-                  className="w-8 h-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-500 hover:text-amber-700 flex items-center justify-center transition-all active:scale-90"
-                >
-                  <FiEdit2 className="w-3.5 h-3.5" />
-                </button>
+                    <div className="font-mono text-xs text-gray-500">{stop.latitude}</div>
+                    <div className="font-mono text-xs text-gray-500">{stop.longitude}</div>
 
-                <button
-                  onClick={() => handleToggleActive(stop.id)}
-                  title={stop.isActive ? "Suspend stop" : "Activate stop"}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full border transition-colors ${
-                    stop.isActive ? "bg-emerald-400 border-emerald-400" : "bg-slate-200 border-slate-300"
-                  }`}
-                >
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                    stop.isActive ? "translate-x-6" : "translate-x-1"
-                  }`} />
-                </button>
-              </div>
+                    <div>
+                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${
+                        stop.isActive ? "bg-emerald-600 text-white" : "bg-amber-400 text-white"
+                      }`}>
+                        {stop.isActive ? "Active" : "Suspended"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button onClick={() => openEditModal(stop)} title="Edit stop"
+                        className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center hover:bg-amber-100 shadow-sm transition">
+                        <FiEdit2 className="text-amber-500 w-3.5 h-3.5" />
+                      </button>
+                      {stop.isActive ? (
+                        <button onClick={() => handleToggleActive(stop)} title="Suspend stop"
+                          className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 shadow-sm transition">
+                          <IoBan className="text-red-400 w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button onClick={() => handleToggleActive(stop)} title="Activate stop"
+                          className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center hover:bg-emerald-100 shadow-sm transition">
+                          <IoCheckmarkCircle className="text-emerald-500 w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          ))
-        )}
-      </div>
-    </div>
-  </div>
+          </div>
+        </div>
+      </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
           ADD / EDIT MODAL
       ══════════════════════════════════════════════════════════════════════ */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 relative max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="relative mx-4 w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
 
-            <button
-              onClick={() => setShowModal(false)}
-              className="absolute right-5 top-5 w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition font-black text-sm"
-            >✕</button>
+            <button type="button" aria-label="Close modal" onClick={() => setShowModal(false)}
+              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white">
+              <FaXmark />
+            </button>
 
-            <div className="mb-6 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#122843] flex items-center justify-center shrink-0">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#122843] flex items-center justify-center flex-shrink-0">
                 {editId !== null
-                  ? <MdEditLocationAlt className="w-6 h-6 text-white" />
-                  : <TbMapPin className="w-6 h-6 text-white" />}
+                  ? <MdEditLocationAlt className="w-5 h-5 text-white" />
+                  : <TbMapPin className="w-5 h-5 text-white" />}
               </div>
               <div>
-                <h2 className="text-xl font-black text-[#122843] tracking-tight">
-                  {editId !== null ? "Edit Stop" : "New Stop Registration"}
-                </h2>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">
+                <h3 className="text-lg font-bold text-gray-800">
+                  {editId !== null ? "Edit Stop" : "Add New Stop"}
+                </h3>
+                <p className="text-xs text-gray-500">
                   {editId !== null ? "Update stop details" : "Add a new bus stop to the network"}
                 </p>
               </div>
             </div>
 
+            <p className="mb-4 text-xs text-gray-500">
+              Fields marked with <span className="text-red-600">*</span> are mandatory.
+            </p>
+
             {apiError && (
-              <div className="mb-5 flex items-start gap-2 text-xs font-semibold text-red-600 bg-red-50 p-3.5 rounded-xl border border-red-100">
+              <div className="mb-4 flex items-start gap-2 rounded-md border border-red-100 bg-red-50 p-3 text-xs font-semibold text-red-600">
                 <span className="mt-0.5">⚠</span>
                 <span>{apiError}</span>
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
 
               <div>
-                <label className={labelCls}>Stop Name</label>
+                <label className={labelCls}>Stop Name <span className="text-red-600">*</span></label>
                 <input
                   type="text"
                   name="stopName"
@@ -397,16 +421,12 @@ export default function AdminManageStopsPage() {
                 <label className={labelCls}>Location Input Method</label>
                 <div className="flex gap-2">
                   {(["manual", "map"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setUseMap(mode === "map")}
-                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold border-2 transition flex items-center justify-center gap-2 ${
+                    <button key={mode} type="button" onClick={() => setUseMap(mode === "map")}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold border transition flex items-center justify-center gap-2 ${
                         (mode === "map") === useMap
                           ? "bg-[#122843] text-white border-[#122843]"
                           : "bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
+                      }`}>
                       {mode === "manual"
                         ? <><FiEdit2 className="w-3.5 h-3.5" /> Enter Manually</>
                         : <><FiMapPin className="w-3.5 h-3.5" /> Pick from Map</>}
@@ -416,7 +436,7 @@ export default function AdminManageStopsPage() {
               </div>
 
               {useMap && (
-                <div className="rounded-xl overflow-hidden border border-gray-200">
+                <div className="rounded-lg overflow-hidden border border-gray-200">
                   <StopsMapPicker formData={formData} setFormData={setFormData} />
                   <p className="text-xs text-gray-400 px-3 py-2 bg-gray-50 flex items-center gap-1.5">
                     <IoLocationSharp className="w-3.5 h-3.5 text-[#4CAF8A]" />
@@ -425,28 +445,22 @@ export default function AdminManageStopsPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Latitude</label>
+                  <label className={labelCls}>Latitude <span className="text-red-600">*</span></label>
                   <input
-                    type="text"
-                    name="latitude"
-                    placeholder="6.9271"
-                    value={formData.latitude}
-                    onChange={handleChange}
+                    type="text" name="latitude" placeholder="6.9271"
+                    value={formData.latitude} onChange={handleChange}
                     readOnly={useMap}
                     className={`${ic("latitude")} ${useMap ? "bg-gray-100 cursor-not-allowed" : ""}`}
                   />
                   <FieldError msg={fe("latitude")} />
                 </div>
                 <div>
-                  <label className={labelCls}>Longitude</label>
+                  <label className={labelCls}>Longitude <span className="text-red-600">*</span></label>
                   <input
-                    type="text"
-                    name="longitude"
-                    placeholder="79.8612"
-                    value={formData.longitude}
-                    onChange={handleChange}
+                    type="text" name="longitude" placeholder="79.8612"
+                    value={formData.longitude} onChange={handleChange}
                     readOnly={useMap}
                     className={`${ic("longitude")} ${useMap ? "bg-gray-100 cursor-not-allowed" : ""}`}
                   />
@@ -455,23 +469,30 @@ export default function AdminManageStopsPage() {
               </div>
             </div>
 
-            <div className="mt-8 flex justify-end gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-5 py-2 rounded-xl bg-gray-100 font-bold text-gray-600 text-sm hover:bg-gray-200 transition"
-              >
-                Discard
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowModal(false)}
+                className="rounded-md bg-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-400 transition">
+                Cancel
               </button>
-              <button
-                onClick={handleSubmit}
-                className="px-8 py-2 rounded-xl bg-[#122843] text-white font-bold text-sm shadow-lg hover:bg-[#1a3a5c] transition active:scale-95"
-              >
-                Save Stop
+              <button type="button" disabled={submitting} onClick={handleSubmit}
+                className="rounded-xl bg-[#f5a623] hover:bg-[#e09510] px-8 py-2 text-sm font-bold text-white shadow-md transition disabled:cursor-not-allowed disabled:bg-gray-400 active:scale-95">
+                {submitting ? "Saving..." : editId !== null ? "Save Changes" : "Add Stop"}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+
+      {/* ── CONFIRM MODAL ── */}
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        confirmClass={confirmState.confirmClass}
+        onCancel={() => setConfirmState((s) => ({ ...s, open: false }))}
+        onConfirm={confirmState.onConfirm}
+      />
+    </>
   );
 }
