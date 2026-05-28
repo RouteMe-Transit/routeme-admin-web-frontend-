@@ -295,6 +295,7 @@ export default function AdminComplaints() {
           )}
         </div>
       </div>
+    </div>
 
       {/* MODAL */}
       {selectedComplaint && (
