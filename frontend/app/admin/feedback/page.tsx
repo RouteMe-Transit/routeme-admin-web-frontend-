@@ -250,7 +250,6 @@ export default function AdminFeedback() {
           )}
         </div>
       </div>
-      </div>
 
       {/* MODAL */}
       {selectedFeedback && (
