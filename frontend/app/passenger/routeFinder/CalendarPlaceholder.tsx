@@ -14,13 +14,13 @@ export default function CalendarPlaceholder({ selected, onSelect }: Props) {
     : "Sep 2025";
 
   return (
-    <div className="bg-white rounded-3xl p-4 shadow-sm">
-      <div className="flex justify-between items-center mb-3">
-        <div className="font-semibold text-lg text-slate-900">Calendar</div>
-        <div className="text-sm text-slate-500">{displayMonth}</div>
+    <div className="bg-white rounded-3xl p-3 md:p-4 shadow-sm">
+      <div className="flex justify-between items-center mb-2 md:mb-3">
+        <div className="font-semibold text-base md:text-lg text-slate-900">Calendar</div>
+        <div className="text-xs md:text-sm text-slate-500">{displayMonth}</div>
       </div>
 
-      <div className="border border-slate-200 rounded-[32px] p-3 bg-slate-50">
+      <div className="border border-slate-200 rounded-[32px] p-2 md:p-3 bg-slate-50">
         <DayPicker
           mode="single"
           selected={selected ?? undefined}
