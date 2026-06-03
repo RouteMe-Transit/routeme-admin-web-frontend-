@@ -28,14 +28,14 @@ export default function PassengerRouteFinderPage() {
     }
 
     return (
-        <main className="min-h-screen p-6 bg-gray-100">
+        <main className="min-h-screen p-3 md:p-6 bg-gray-100">
             <div className="max-w-6xl mx-auto">
-                <header className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-800">Route Finder</h1>
+                <header className="mb-4 md:mb-6">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Route Finder</h1>
                 </header>
 
-                <div className="grid grid-cols-12 gap-6">
-                    <div className="col-span-8 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                    <div className="col-span-1 md:col-span-8 space-y-3 md:space-y-4">
                         <RouteSearch onSearch={handleSearch} />
                         {loading ? (
                             <div className="p-6 bg-white rounded-lg">Searching...</div>
@@ -46,7 +46,7 @@ export default function PassengerRouteFinderPage() {
                         <RouteDetails routeId={selectedId} />
                     </div>
 
-                    <aside className="col-span-4">
+                    <aside className="col-span-1 md:col-span-4">
                         <CalendarPlaceholder selected={selectedDate ?? undefined} onSelect={setSelectedDate} />
                         {selectedDate && (
                             <div className="mt-3 text-sm text-gray-600">Selected: {selectedDate.toDateString()}</div>
