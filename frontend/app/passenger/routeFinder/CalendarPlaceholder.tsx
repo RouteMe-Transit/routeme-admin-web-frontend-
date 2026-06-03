@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
@@ -9,15 +9,23 @@ type Props = {
 };
 
 export default function CalendarPlaceholder({ selected, onSelect }: Props) {
-  const displayMonth = selected
-    ? selected.toLocaleString("default", { month: "short", year: "numeric" })
-    : "Sep 2025";
+  const [displayMonth, setDisplayMonth] = useState<Date>(selected ?? new Date());
+
+  useEffect(() => {
+    if (selected) setDisplayMonth(selected);
+  }, [selected]);
+
+  function handleMonthChange(month: Date) {
+    setDisplayMonth(month);
+  }
+
+  const label = displayMonth.toLocaleString("default", { month: "long", year: "numeric" });
 
   return (
     <div className="bg-white rounded-3xl p-3 md:p-4 shadow-sm">
       <div className="flex justify-between items-center mb-2 md:mb-3">
         <div className="font-semibold text-base md:text-lg text-slate-900">Calendar</div>
-        <div className="text-xs md:text-sm text-slate-500">{displayMonth}</div>
+        <div className="text-xs md:text-sm text-slate-500">{label}</div>
       </div>
 
       <div className="border border-slate-200 rounded-[32px] p-2 md:p-3 bg-slate-50">
@@ -25,6 +33,7 @@ export default function CalendarPlaceholder({ selected, onSelect }: Props) {
           mode="single"
           selected={selected ?? undefined}
           onSelect={onSelect}
+          onMonthChange={handleMonthChange}
           className="w-full max-w-[280px] mx-auto rounded-3xl bg-white shadow-sm"
           captionLayout="buttons"
           fromYear={2024}
