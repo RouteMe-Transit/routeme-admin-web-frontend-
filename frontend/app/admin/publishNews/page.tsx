@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import { z } from "zod";
 import { useAdminTheme } from "../AdminThemeContext";
+import { supabase } from "@/lib/supabaseClient";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type NewsCategory =
@@ -122,6 +123,7 @@ export default function AdminPublishNews() {
   const [showPreview,    setShowPreview]    = useState(false);
   const [submitting,     setSubmitting]     = useState(false);
   const [errors,         setErrors]         = useState<Record<string, string>>({});
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
   // Sidebar state
   const [publishedArticles, setPublishedArticles] = useState<PublishedNewsItem[]>([]);
@@ -214,7 +216,33 @@ export default function AdminPublishNews() {
     setCoverImageName(null);
     coverFile.current = null;
     setErrors({});
+    setUploadProgress(null);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  // ── Upload image to Supabase Storage ────────────────────────────────────────
+  const uploadImageToSupabase = async (file: File): Promise<string> => {
+    const ext      = file.name.split(".").pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const filePath = `covers/${fileName}`;
+
+    setUploadProgress("Uploading image to storage…");
+
+    const { error } = await supabase.storage
+      .from("news-images")
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (error) throw new Error(`Image upload failed: ${error.message}`);
+
+    const { data } = supabase.storage
+      .from("news-images")
+      .getPublicUrl(filePath);
+
+    setUploadProgress(null);
+    return data.publicUrl;
   };
 
   // ── Submit ──────────────────────────────────────────────────────────────────
@@ -222,17 +250,10 @@ export default function AdminPublishNews() {
     const token      = getAuthToken();
     const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
+    // Upload image to Supabase first, then send URL to backend
+    let imageUrl: string | undefined;
     if (coverFile.current) {
-      const fd = new FormData();
-      fd.append("title",         title.trim());
-      fd.append("category",      category);
-      fd.append("content",       content.trim());
-      fd.append("isPublished",   String(isPublished));
-      fd.append("publishedDate", new Date(publishedDate).toISOString());
-      fd.append("image",         coverFile.current);
-      return axios.post(`${API_BASE}/api/v1/news`, fd, {
-        headers: { ...authHeader, "Content-Type": "multipart/form-data" },
-      });
+      imageUrl = await uploadImageToSupabase(coverFile.current);
     }
 
     return axios.post(
@@ -243,6 +264,7 @@ export default function AdminPublishNews() {
         content:       content.trim(),
         isPublished,
         publishedDate: new Date(publishedDate).toISOString(),
+        ...(imageUrl ? { image: imageUrl } : {}),
       },
       { headers: authHeader },
     );
@@ -264,11 +286,14 @@ export default function AdminPublishNews() {
           err.response?.data?.errors?.[0]?.msg ??
           "Failed to publish article";
         toast.error(msg);
+      } else if (err instanceof Error) {
+        toast.error(err.message);
       } else {
         toast.error("Failed to publish article");
       }
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -284,11 +309,14 @@ export default function AdminPublishNews() {
     } catch (err) {
       if (axios.isAxiosError(err)) {
         toast.error(err.response?.data?.message ?? "Failed to save draft");
+      } else if (err instanceof Error) {
+        toast.error(err.message);
       } else {
         toast.error("Failed to save draft");
       }
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -481,6 +509,33 @@ export default function AdminPublishNews() {
             )}
           </div>
 
+          {/* Upload progress indicator */}
+          {uploadProgress && (
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "12px 16px", marginBottom: "16px",
+                background: isDarkMode ? "#1e3d2a" : "#f0faf6",
+                borderRadius: "8px",
+                border: `1px solid ${isDarkMode ? "#2d5a3d" : "#bbf7d0"}`,
+              }}
+            >
+              <div
+                style={{
+                  width: "16px", height: "16px", borderRadius: "50%",
+                  border: "2px solid #4CAF8A",
+                  borderTopColor: "transparent",
+                  animation: "spin 0.8s linear infinite",
+                  flexShrink: 0,
+                }}
+              />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              <span style={{ fontSize: "13px", color: isDarkMode ? "#4ade80" : "#15803d", fontWeight: 600 }}>
+                {uploadProgress}
+              </span>
+            </div>
+          )}
+
           {/* Separator */}
           <div style={{ height: "1px", background: isDarkMode ? "#243a52" : "#f0f4f8", marginBottom: "24px" }} />
 
@@ -497,7 +552,7 @@ export default function AdminPublishNews() {
                 border: "none", fontSize: "14px", transition: "background 0.2s",
               }}
             >
-              {submitting ? "Publishing…" : "Publish Now"}
+              {submitting ? (uploadProgress ? "Uploading…" : "Publishing…") : "Publish Now"}
             </button>
 
             <button
