@@ -3,6 +3,31 @@
 
 @import "leaflet/dist/leaflet.css";
 
+:root {
+    --page-container-max-width: 80rem;
+    --page-container-padding: 1rem;
+}
+
+@media (min-width: 640px) {
+    :root {
+        --page-container-padding: 1.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    :root {
+        --page-container-padding: 3rem;
+    }
+}
+
+.page-container {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: var(--page-container-max-width);
+    padding-left: var(--page-container-padding);
+    padding-right: var(--page-container-padding);
+}
+
 body {
     background: #f5f4f1;
     color: #183555;

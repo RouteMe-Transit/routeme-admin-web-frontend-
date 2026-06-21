@@ -11,7 +11,7 @@ export default function Navbar() {
 
     return (
         <div className="sticky top-0 z-50 w-full bg-[#183555] shadow-lg">
-            <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+            <div className="page-container flex w-full items-center justify-between py-3">
                 {/* Logo */}
                 <div className="flex min-w-0 items-center gap-3">
                     <LogoNname />
