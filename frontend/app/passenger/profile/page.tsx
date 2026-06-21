@@ -1,6 +1,8 @@
 "use client";
-import { useState } from "react";
+
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import toast from "react-hot-toast";
 import { CgClose } from "react-icons/cg";
 import { IoMdAdd } from "react-icons/io";
@@ -9,111 +11,345 @@ import { IoEye } from "react-icons/io5";
 import { usePassengerTheme } from "../PassengerThemeContext";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import ProfileActionList, { type ProfileActionItem } from "../../components/profile/ProfileActionList";
+import api from "../../services/api";
 
 type FavoriteRoute = {
     id: number;
     code: string;
     name: string;
+    from?: string;
+    to?: string;
 };
 
 type FeedbackItem = {
     id: number;
+    category: string;
+    busNumber: string;
+    rating: number;
     message: string;
     date: string;
 };
 
+type RouteApiRecord = {
+    id?: unknown;
+    routeId?: unknown;
+    routeCode?: unknown;
+    code?: unknown;
+    routeName?: unknown;
+    name?: unknown;
+    from?: unknown;
+    to?: unknown;
+    route?: {
+        id?: unknown;
+        routeId?: unknown;
+        routeCode?: unknown;
+        code?: unknown;
+        routeName?: unknown;
+        name?: unknown;
+        from?: unknown;
+        to?: unknown;
+    } | null;
+};
+
+const FAVORITES_STORAGE_KEY = "passengerFavoriteRoutes";
+const SUBSCRIPTIONS_ENDPOINT = "/users/me/subscriptions";
+
+const getAuthConfig = () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+};
+
+const toNumber = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toText = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
+
+const getResponseData = <T,>(payload: unknown): T | undefined => {
+    if (payload && typeof payload === "object" && "data" in payload) {
+        return (payload as { data?: T }).data;
+    }
+
+    return payload as T;
+};
+
+const getRouteItems = (payload: unknown): RouteApiRecord[] => {
+    const data = getResponseData<unknown>(payload);
+
+    if (Array.isArray(data)) {
+        return data as RouteApiRecord[];
+    }
+
+    if (!data || typeof data !== "object") {
+        return [];
+    }
+
+    const container = data as { routes?: unknown; alerts?: unknown; items?: unknown; data?: unknown };
+
+    if (Array.isArray(container.routes)) return container.routes as RouteApiRecord[];
+    if (Array.isArray(container.alerts)) return container.alerts as RouteApiRecord[];
+    if (Array.isArray(container.items)) return container.items as RouteApiRecord[];
+    if (Array.isArray(container.data)) return container.data as RouteApiRecord[];
+
+    return [];
+};
+
+const normalizeRoute = (record: RouteApiRecord): FavoriteRoute | null => {
+    const source = record.route ?? record;
+    const id = toNumber(source.routeId ?? source.id ?? record.routeId ?? record.id);
+
+    if (id === null) {
+        return null;
+    }
+
+    const code = toText(source.routeCode ?? source.code ?? record.routeCode ?? record.code) ?? String(id);
+    const from = toText(source.from ?? record.from);
+    const to = toText(source.to ?? record.to);
+    const routeName = toText(source.routeName ?? source.name ?? record.routeName ?? record.name);
+
+    return {
+        id,
+        code,
+        name: routeName ?? (from && to ? `${from} - ${to}` : `Route ${code}`),
+        from,
+        to,
+    };
+};
+
+const normalizeRoutes = (payload: unknown) => getRouteItems(payload).map(normalizeRoute).filter((route): route is FavoriteRoute => route !== null);
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (axios.isAxiosError(error)) {
+        const responseData = error.response?.data as
+            | { message?: string; error?: string; errors?: Array<{ message?: string; msg?: string }> }
+            | undefined;
+
+        return responseData?.message ?? responseData?.error ?? responseData?.errors?.[0]?.message ?? responseData?.errors?.[0]?.msg ?? fallback;
+    }
+
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return fallback;
+};
+
+const readStoredFavoriteRoutes = (): FavoriteRoute[] => {
+    if (typeof window === "undefined") {
+        return [];
+    }
+
+    try {
+        const raw = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
+        if (!raw) {
+            return [];
+        }
+
+        const parsed = JSON.parse(raw) as unknown;
+        return Array.isArray(parsed) ? normalizeRoutes(parsed) : [];
+    } catch {
+        return [];
+    }
+};
+
+const writeStoredFavoriteRoutes = (routes: FavoriteRoute[]) => {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    try {
+        window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(routes));
+    } catch {
+        // ignore storage failures
+    }
+};
+
+const filterFavoriteRoutes = (routes: FavoriteRoute[], search: string) => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+        return routes;
+    }
+
+    return routes.filter((route) => {
+        const haystack = [route.code, route.name, route.from, route.to]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+        return haystack.includes(normalizedSearch);
+    });
+};
+
+const updateSubscriptionList = async (routes: FavoriteRoute[]) => {
+    await api.put(
+        SUBSCRIPTIONS_ENDPOINT,
+        { subscribedRoutes: routes.map((route) => route.name) },
+        getAuthConfig()
+    );
+};
+
+const formatRouteSubtitle = (route: FavoriteRoute) => {
+    if (route.from && route.to) {
+        return `${route.from} → ${route.to}`;
+    }
+
+    return route.name;
+};
+
+const initialUser = {
+    firstName: "Kavindra",
+    lastName: "Senarathne",
+    image: "/default-profile-image.svg",
+};
+
+const initialFeedback: FeedbackItem[] = [
+    {
+        id: 1,
+        category: "Delay",
+        busNumber: "138",
+        rating: 2,
+        message: "The bus was late today.",
+        date: "2026-04-07",
+    },
+    {
+        id: 2,
+        category: "Service",
+        busNumber: "138",
+        rating: 5,
+        message: "Great service on Route 138!hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+        date: "2026-04-05",
+    },
+];
 
 export default function PassengerProfilePage() {
     const router = useRouter();
     const { isDarkMode, toggleTheme } = usePassengerTheme();
     const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem | null>(null);
     const [view, setView] = useState<"profile" | "favorites" | "addRoute" | "feedback" | "editProfile" | "changePassword">("profile");
-
-    const [user, setUser] = useState<{
-        firstName: string;
-        lastName: string;
-        image: string;
-        favoriteRoutes: FavoriteRoute[];
-        feedback: FeedbackItem[];
-    }>({
-        firstName: "Kavindra",
-        lastName: "Senarathne",
-        image: "/default-profile-image.svg",
-        favoriteRoutes: [
-            { id: 1, code: "138", name: "Homagama - Pettah" },
-            { id: 2, code: "122", name: "Moratuwa - Pettah" }
-        ],
-        feedback: [
-            {
-                id: 1,
-                category: "Delay",
-                busNumber: "138",
-                rating: 2,
-                message: "The bus was late today.",
-                date: "2026-04-07",
-            },
-            {
-                id: 2,
-                category: "Service",
-                busNumber: "138",
-                rating: 5,
-                message: "Great service on Route 138!hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-                date: "2026-04-05",
-            }
-        ]
+    const [user, setUser] = useState(initialUser);
+    const [favoriteRoutes, setFavoriteRoutes] = useState<FavoriteRoute[]>([]);
+    const [favoriteSearch, setFavoriteSearch] = useState("");
+    const [routeSearch, setRouteSearch] = useState("");
+    const [routeResults, setRouteResults] = useState<FavoriteRoute[]>([]);
+    const [favoriteRoutesLoading, setFavoriteRoutesLoading] = useState(false);
+    const [routeResultsLoading, setRouteResultsLoading] = useState(false);
+    const [favoriteRoutesError, setFavoriteRoutesError] = useState("");
+    const [routeResultsError, setRouteResultsError] = useState("");
+    const [editData, setEditData] = useState({
+        firstName: initialUser.firstName,
+        lastName: initialUser.lastName,
+        email: "",
+        phone: "",
+        image: initialUser.image,
     });
-    const [search, setSearch] = useState("");
+    const [passwordData, setPasswordData] = useState({
+        newPassword: "",
+        confirmPassword: "",
+        oldPassword: "",
+    });
 
-    const allRoutes: FavoriteRoute[] = [
-        { id: 1, code: "138", name: "Route 138" },
-        { id: 2, code: "122", name: "Route 122" },
-        { id: 3, code: "100", name: "Route 100" },
-        { id: 4, code: "245", name: "Route 245" },
-        { id: 5, code: "300", name: "Route 300" },
-        { id: 6, code: "450", name: "Route 450" },
-        { id: 7, code: "500", name: "Route 500" },
-        { id: 8, code: "600", name: "Route 600" },
-        { id: 9, code: "700", name: "Route 700" },
-        { id: 10, code: "800", name: "Route 800" },
-        { id: 11, code: "900", name: "Route 900" },
-        { id: 12, code: "1000", name: "Route 1000" }
-    ];
-    const filteredRoutes = allRoutes.filter(route => route.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const loadFavoriteRoutes = useCallback(async () => {
+            setFavoriteRoutesLoading(true);
+            setFavoriteRoutesError("");
 
-    const addRouteToFavorites = (route: FavoriteRoute) => {
-        const exists = user.favoriteRoutes.some((r) => r.id === route.id);
-        if (exists) {
-            toast.error("Route is already in favorites.", { id: "fav-route-exists" });
+            const storedRoutes = filterFavoriteRoutes(readStoredFavoriteRoutes(), favoriteSearch);
+            setFavoriteRoutes(storedRoutes);
+
+            setFavoriteRoutesLoading(false);
+        }, [favoriteSearch]);
+
+    const loadRouteResults = useCallback(async () => {
+        try {
+            setRouteResultsLoading(true);
+            setRouteResultsError("");
+
+            const search = routeSearch.trim();
+            const response = await api.get("/routes", {
+                params: search ? { search } : undefined,
+            });
+
+            setRouteResults(normalizeRoutes(response.data));
+        } catch (error) {
+            const message = getErrorMessage(error, "Failed to search routes.");
+            setRouteResultsError(message);
+            toast.error(message);
+        } finally {
+            setRouteResultsLoading(false);
+        }
+    }, [routeSearch]);
+
+    useEffect(() => {
+        setEditData((prev) => ({
+            ...prev,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            image: user.image,
+        }));
+    }, [user.firstName, user.lastName, user.image]);
+
+    useEffect(() => {
+        if (view !== "favorites") {
             return;
         }
 
-        setUser((prev) => ({
-            ...prev,
-            favoriteRoutes: [...prev.favoriteRoutes, route],
-        }));
-        toast.success("Route added to favorites.", { id: "fav-route-added" });
-        setView("favorites");
-    };
-    const removeRoute = (id: number) => {
-        setUser(prev => ({
-            ...prev,
-            favoriteRoutes: prev.favoriteRoutes.filter(r => r.id !== id),
-        }));
-        toast.success("Route removed from favorites.", { id: "fav-route-removed" });
-    };
-    const [editData, setEditData] = useState({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: "",
-        phone: "",
-        image: user.image,
-    });
+        const timeoutId = window.setTimeout(() => {
+            void loadFavoriteRoutes();
+        }, 250);
 
+        return () => window.clearTimeout(timeoutId);
+    }, [view, loadFavoriteRoutes]);
 
+    useEffect(() => {
+        if (view !== "addRoute") {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            void loadRouteResults();
+        }, 250);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [view, loadRouteResults]);
+
+    const addRouteToFavorites = async (route: FavoriteRoute) => {
+        try {
+            const storedRoutes = readStoredFavoriteRoutes();
+            const exists = storedRoutes.some((currentRoute) => currentRoute.id === route.id);
+            if (exists) {
+                toast.error("Route is already in favorites.", { id: "fav-route-exists" });
+                return;
+            }
+
+            const nextRoutes = [...storedRoutes, route];
+
+            writeStoredFavoriteRoutes(nextRoutes);
+            await updateSubscriptionList(nextRoutes);
+
+            toast.success("Route added to favorites.", { id: "fav-route-added" });
+            await loadFavoriteRoutes();
+            setView("favorites");
+        } catch (error) {
+            toast.error(getErrorMessage(error, "Unable to add route to favorites."));
+        }
+    };
+
+    const removeRoute = async (id: number) => {
+        try {
+            const nextRoutes = readStoredFavoriteRoutes().filter((route) => route.id !== id);
+
+            writeStoredFavoriteRoutes(nextRoutes);
+            await updateSubscriptionList(nextRoutes);
+            toast.success("Route removed from favorites.", { id: "fav-route-removed" });
+            await loadFavoriteRoutes();
+        } catch (error) {
+            toast.error(getErrorMessage(error, "Unable to remove route from favorites."));
+        }
+    };
 
     const handleUpdateProfile = () => {
-        setUser(prev => ({
+        setUser((prev) => ({
             ...prev,
             firstName: editData.firstName,
             lastName: editData.lastName,
@@ -124,11 +360,6 @@ export default function PassengerProfilePage() {
         setView("profile");
     };
 
-    const [passwordData, setPasswordData] = useState({
-        newPassword: "",
-        confirmPassword: "",
-        oldPassword: "",
-    });
     const handleChangePassword = () => {
         if (!passwordData.newPassword || !passwordData.confirmPassword || !passwordData.oldPassword) {
             toast.error("Please fill all fields");
@@ -140,14 +371,17 @@ export default function PassengerProfilePage() {
             return;
         }
 
-        // simulate success (later replace with API)
         toast.success("Password changed successfully 🔐");
-
         setPasswordData({ newPassword: "", confirmPassword: "", oldPassword: "" });
         setView("profile");
     };
 
     const handleSignOut = () => {
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+        }
+
         toast.success("Signed out successfully");
         router.push("/login");
     };
@@ -189,16 +423,6 @@ export default function PassengerProfilePage() {
             danger: true,
         },
     ];
-    type FeedbackItem = {
-        id: number;
-        category: string;
-        busNumber: string;
-        rating: number;
-        message: string;
-        date: string;
-    };
-
-
 
     return (
         <section className="">
@@ -225,33 +449,50 @@ export default function PassengerProfilePage() {
                     <div className="h-150 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-lg font-bold text-gray-800">Favorite Routes</h2>
-                            <button className="rounded bg-red-500 hover:bg-red-600 p-1"
-
-                                onClick={() => setView("profile")}
-                            >
+                            <button className="rounded bg-red-500 hover:bg-red-600 p-1" onClick={() => setView("profile")}>
                                 <CgClose size={15} color="white" />
                             </button>
                         </div>
+
                         <div className="flex justify-end mt-4">
-                            <button className="rounded bg-green-600 hover:bg-green-700 p-1"
-                                onClick={() => setView("addRoute")}
-                            >
+                            <button className="rounded bg-green-600 hover:bg-green-700 p-1" onClick={() => setView("addRoute")}>
                                 <IoMdAdd size={16} color="white" />
                             </button>
                         </div>
 
+                        <div className="mt-4 space-y-3">
+                            <input
+                                type="text"
+                                placeholder="Search saved routes..."
+                                value={favoriteSearch}
+                                onChange={(e) => setFavoriteSearch(e.target.value)}
+                                className="w-full rounded border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="text-xs text-gray-500">
+                                These favorites are also your route subscriptions, so matching alerts will appear in your feed.
+                            </p>
+                        </div>
+
+                        {favoriteRoutesError && <p className="mt-3 text-sm text-red-600">{favoriteRoutesError}</p>}
+                        {favoriteRoutesLoading && <p className="mt-5 text-sm text-gray-500">Loading favorite routes...</p>}
+
                         <ul className="space-y-2 mt-5">
-                            {user.favoriteRoutes.map((route) => (
-                                <li key={route.id} className="rounded-md bg-gray-100 p-4 shadow-sm h-10 flex items-center">
-                                    <img src="/icons/road.svg" alt="Bus Icon" className="w-5 h-5 mr-3" />
-                                    {route.code} -
-                                    {" " + route.name}
-                                    <button className="ml-auto rounded p-1 hover:bg-red-100"
-                                        onClick={() => removeRoute(route.id)}
-                                    >
+                            {!favoriteRoutesLoading && favoriteRoutes.length === 0 ? (
+                                <li className="rounded-md bg-gray-100 p-4 text-sm text-gray-500 shadow-sm">
+                                    No favorite routes saved yet.
+                                </li>
+                            ) : null}
+
+                            {favoriteRoutes.map((route) => (
+                                <li key={route.id} className="rounded-md bg-gray-100 p-4 shadow-sm flex items-center gap-3">
+                                    <img src="/icons/road.svg" alt="Bus Icon" className="w-5 h-5" />
+                                    <div className="min-w-0">
+                                        <p className="font-medium text-gray-800">{route.code} - {route.name}</p>
+                                        <p className="text-xs text-gray-500">{formatRouteSubtitle(route)}</p>
+                                    </div>
+                                    <button className="ml-auto rounded p-1 hover:bg-red-100" onClick={() => void removeRoute(route.id)}>
                                         <MdDelete size={22} color="red" />
                                     </button>
-
                                 </li>
                             ))}
                         </ul>
@@ -261,173 +502,106 @@ export default function PassengerProfilePage() {
 
             {view === "addRoute" && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-
                     <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl flex flex-col max-h-150">
-
-
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-lg font-bold text-gray-800">Add Favorite Routes</h2>
-                            <button
-                                className="rounded bg-red-500 hover:bg-red-600 p-1"
-                                onClick={() => setView("profile")}
-                            >
+                            <button className="rounded bg-red-500 hover:bg-red-600 p-1" onClick={() => setView("profile")}>
                                 <CgClose size={15} color="white" />
                             </button>
                         </div>
 
-
                         <input
                             type="text"
                             placeholder="Search routes..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            value={routeSearch}
+                            onChange={(e) => setRouteSearch(e.target.value)}
                             className="w-full rounded border px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
 
+                        <p className="mb-3 text-xs text-gray-500">Adding a route subscribes you to its alerts.</p>
+                        {routeResultsError && <p className="mb-3 text-sm text-red-600">{routeResultsError}</p>}
+                        {routeResultsLoading && <p className="text-sm text-gray-500">Searching routes...</p>}
 
                         <div className="flex-1 overflow-y-auto space-y-2">
-                            {filteredRoutes.length === 0 ? (
+                            {!routeResultsLoading && routeResults.length === 0 ? (
                                 <p className="text-sm text-gray-500">No routes found</p>
                             ) : (
-                                filteredRoutes.map(route => (
+                                routeResults.map((route) => (
                                     <div
                                         key={route.id}
                                         className="cursor-pointer rounded border px-3 py-2 hover:bg-blue-50 flex justify-between items-center"
                                     >
-                                        <span>{route.name}</span>
-                                        <button className="rounded bg-green-600 hover:bg-green-700 p-1"
-                                            onClick={() => addRouteToFavorites(route)}
-
-                                        >
+                                        <div className="min-w-0 pr-3">
+                                            <p className="font-medium text-gray-800">{route.code} - {route.name}</p>
+                                            <p className="text-xs text-gray-500">{formatRouteSubtitle(route)}</p>
+                                        </div>
+                                        <button className="rounded bg-green-600 hover:bg-green-700 p-1" onClick={() => void addRouteToFavorites(route)}>
                                             <IoMdAdd size={16} color="white" />
-
                                         </button>
                                     </div>
                                 ))
                             )}
                         </div>
-
                     </div>
                 </div>
             )}
+
             {view === "feedback" && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-
                     <div className="h-150 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-
-                        {/* Header */}
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-lg font-bold text-gray-800">My Feedback</h2>
-                            <button
-                                className="rounded bg-red-500 hover:bg-red-600 p-1"
-                                onClick={() => setView("profile")}
-                            >
+                            <button className="rounded bg-red-500 hover:bg-red-600 p-1" onClick={() => setView("profile")}>
                                 <CgClose size={15} color="white" />
                             </button>
                         </div>
 
-                        {/* Feedback List */}
                         <ul className="space-y-3 mt-5">
-                            {user.feedback.length === 0 ? (
-                                <p className="text-sm text-gray-500 text-center">
-                                    No feedback submitted yet
-                                </p>
+                            {initialFeedback.length === 0 ? (
+                                <p className="text-sm text-gray-500 text-center">No feedback submitted yet</p>
                             ) : (
-                                user.feedback.map((item) => (
-                                    <li
-                                        key={item.id}
-                                        className="rounded-md bg-gray-100 p-4 shadow-sm"
-                                    >
+                                initialFeedback.map((item) => (
+                                    <li key={item.id} className="rounded-md bg-gray-100 p-4 shadow-sm">
                                         <div className="flex justify-between items-start">
-
-                                            <div className="max-w-[220px]">
-                                                {/* Category */}
-                                                <p className="text-sm font-semibold text-[#122843]">
-                                                    {item.category}
-                                                </p>
-
-                                                {/* Bus Number */}
-                                                <p className="text-xs text-gray-600">
-                                                    Bus: {item.busNumber}
-                                                </p>
-
-
-
-                                                {/* Short message */}
-                                                <p className="text-gray-800 text-sm mt-1 truncate">
-                                                    {item.message}
-                                                </p>
-
-                                                <p className="text-xs text-gray-500 mt-2">
-                                                    {item.date}
-                                                </p>
+                                            <div className="max-w-55">
+                                                <p className="text-sm font-semibold text-[#122843]">{item.category}</p>
+                                                <p className="text-xs text-gray-600">Bus: {item.busNumber}</p>
+                                                <p className="text-gray-800 text-sm mt-1 truncate">{item.message}</p>
+                                                <p className="text-xs text-gray-500 mt-2">{item.date}</p>
                                             </div>
 
-                                            {/* View Button */}
-                                            <button
-                                                className="text-blue-600 text-sm underline"
-                                                onClick={() => setSelectedFeedback(item)}
-                                            >
+                                            <button className="text-blue-600 text-sm underline" onClick={() => setSelectedFeedback(item)}>
                                                 <IoEye size={25} />
                                             </button>
-
                                         </div>
                                     </li>
                                 ))
                             )}
                         </ul>
-
                     </div>
                 </div>
             )}
 
             {selectedFeedback && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-
                     <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl space-y-4">
-
-                        {/* Header */}
                         <div className="flex justify-between items-center">
                             <h2 className="text-lg font-bold">Feedback Details</h2>
-                            <button
-                                className="bg-red-500 hover:bg-red-600 p-1 rounded"
-                                onClick={() => setSelectedFeedback(null)}
-                            >
+                            <button className="bg-red-500 hover:bg-red-600 p-1 rounded" onClick={() => setSelectedFeedback(null)}>
                                 <CgClose size={16} color="white" />
                             </button>
                         </div>
 
-                        {/* Content */}
                         <div className="space-y-2 text-sm">
-
-                            <p>
-                                <span className="font-semibold">Category:</span>{" "}
-                                {selectedFeedback.category}
-                            </p>
-
-                            <p>
-                                <span className="font-semibold">Bus Number:</span>{" "}
-                                {selectedFeedback.busNumber}
-                            </p>
-
+                            <p><span className="font-semibold">Category:</span> {selectedFeedback.category}</p>
+                            <p><span className="font-semibold">Bus Number:</span> {selectedFeedback.busNumber}</p>
                             <p>
                                 <span className="font-semibold">Rating:</span>{" "}
-                                <span className="text-yellow-400">
-                                    {"★".repeat(selectedFeedback.rating)}
-                                </span>
+                                <span className="text-yellow-400">{"★".repeat(selectedFeedback.rating)}</span>
                             </p>
-
-                            <p>
-                                <span className="font-semibold">Message:</span>
-                            </p>
-                            <p className="bg-gray-100 p-3 rounded break-words whitespace-pre-wrap">
-                                {selectedFeedback.message}
-                            </p>
-
-                            <p className="text-xs text-gray-500">
-                                {selectedFeedback.date}
-                            </p>
-
+                            <p><span className="font-semibold">Message:</span></p>
+                            <p className="bg-gray-100 p-3 rounded wrap-break-word whitespace-pre-wrap">{selectedFeedback.message}</p>
+                            <p className="text-xs text-gray-500">{selectedFeedback.date}</p>
                         </div>
                     </div>
                 </div>
@@ -435,21 +609,14 @@ export default function PassengerProfilePage() {
 
             {view === "editProfile" && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-
                     <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl ">
-
-                        {/* Header */}
                         <div className="mb-4 flex justify-between items-center">
                             <h2 className="text-lg font-bold">Edit Profile</h2>
-                            <button
-                                className="bg-red-500 hover:bg-red-600 p-1 rounded"
-                                onClick={() => setView("profile")}
-                            >
+                            <button className="bg-red-500 hover:bg-red-600 p-1 rounded" onClick={() => setView("profile")}>
                                 <CgClose size={16} color="white" />
                             </button>
                         </div>
 
-                        {/* Form */}
                         <div className="space-y-3  justify-center flex flex-col ">
                             <input
                                 type="file"
@@ -464,95 +631,77 @@ export default function PassengerProfilePage() {
 
                             <img src={editData.image} className="w-20 h-20 rounded-full ml-40 border " />
 
-                            {/* Name */}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                <label className="min-w-[120px] text-sm font-medium text-gray-700">First Name:</label>
+                                <label className="min-w-30 text-sm font-medium text-gray-700">First Name:</label>
                                 <input
                                     type="text"
                                     value={editData.firstName}
                                     onChange={(e) => setEditData({ ...editData, firstName: e.target.value })}
                                     placeholder="First Name"
-                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-75 px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                <label className="min-w-[120px] text-sm font-medium text-gray-700">Last Name:</label>
-
+                                <label className="min-w-30 text-sm font-medium text-gray-700">Last Name:</label>
                                 <input
                                     type="text"
                                     value={editData.lastName}
                                     onChange={(e) => setEditData({ ...editData, lastName: e.target.value })}
                                     placeholder="Last Name"
-                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-75 px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 
-                            {/* Email */}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                <label className="min-w-[120px] text-sm font-medium text-gray-700">Email:</label>
+                                <label className="min-w-30 text-sm font-medium text-gray-700">Email:</label>
                                 <input
                                     type="email"
                                     value={editData.email}
                                     onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                                     placeholder="Email"
-                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-75 px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 
-                            {/* Phone */}
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                <label className="min-w-[120px] text-sm font-medium text-gray-700">Phone Number:</label>
+                                <label className="min-w-30 text-sm font-medium text-gray-700">Phone Number:</label>
                                 <input
                                     type="text"
                                     value={editData.phone}
                                     onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
                                     placeholder="Phone Number"
-                                    className="w-full max-w-[300px] px-3 py-2 rounded bg-[#1228430F]"
+                                    className="w-full max-w-75 px-3 py-2 rounded bg-[#1228430F]"
                                 />
                             </div>
 
-
-
-
-                            {/* Button */}
                             <button
                                 className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded"
                                 onClick={handleUpdateProfile}
                             >
                                 Update Profile
-
                             </button>
-
                         </div>
                     </div>
                 </div>
             )}
+
             {view === "changePassword" && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-
                     <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-
-                        {/* Header */}
                         <div className="mb-4 flex justify-between items-center">
                             <h2 className="text-lg font-bold">Change Password</h2>
-                            <button
-                                className="bg-red-500 hover:bg-red-600 p-1 rounded"
-                                onClick={() => setView("profile")}
-                            >
+                            <button className="bg-red-500 hover:bg-red-600 p-1 rounded" onClick={() => setView("profile")}>
                                 <CgClose size={16} color="white" />
                             </button>
                         </div>
 
-                        {/* Inputs */}
                         <div className="space-y-3">
                             <input
                                 type="password"
                                 placeholder="Old Password"
                                 value={passwordData.oldPassword}
-                                onChange={(e) =>
-                                    setPasswordData({ ...passwordData, oldPassword: e.target.value })
-                                }
+                                onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
                                 className="w-full border px-3 py-2 rounded"
                             />
 
@@ -560,9 +709,7 @@ export default function PassengerProfilePage() {
                                 type="password"
                                 placeholder="New Password"
                                 value={passwordData.newPassword}
-                                onChange={(e) =>
-                                    setPasswordData({ ...passwordData, newPassword: e.target.value })
-                                }
+                                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                                 className="w-full border px-3 py-2 rounded"
                             />
 
@@ -570,25 +717,20 @@ export default function PassengerProfilePage() {
                                 type="password"
                                 placeholder="Confirm Password"
                                 value={passwordData.confirmPassword}
-                                onChange={(e) =>
-                                    setPasswordData({ ...passwordData, confirmPassword: e.target.value })
-                                }
+                                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                                 className="w-full border px-3 py-2 rounded"
                             />
 
-                            {/* Button */}
                             <button
                                 className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded"
                                 onClick={handleChangePassword}
                             >
                                 Update Password
                             </button>
-
                         </div>
                     </div>
                 </div>
             )}
-
         </section>
     );
 }
