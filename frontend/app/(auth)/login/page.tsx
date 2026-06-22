@@ -197,6 +197,17 @@ export default function LoginPage() {
             {errors.password && (
               <p className="text-red-500 text-sm mt-1">{errors.password}</p>
             )}
+            {role === "Passenger" && (
+          <p className="text-center text-sm mt-6 text-gray-600">
+            Forgot your password?{" "}
+            <a
+              href="/reset-password"
+              className="text-green-500 font-semibold hover:underline"
+            >
+              Reset Password
+            </a>
+          </p>
+        )}
           </div>
 
           {/* Login Button */}
