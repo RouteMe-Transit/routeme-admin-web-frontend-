@@ -1,235 +1,295 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import api from "@/app/services/api";
+import dynamic from "next/dynamic";
+import { useEffect, useRef, useState, useCallback } from "react";
 
-type BusStatus = "On Time" | "Delayed" | "Breakdown";
+// ── Types ────────────────────────────────────────────────────────────────────
 
-type BusEntry = {
+type BusStatus = "active" | "stale" | "inactive" | string;
+
+type Bus = {
   id: string;
-  route: string;
-  routeDesc: string;
-  driver: string;
-  status: BusStatus;
-  speed: number;
-  eta: string;
-  // Map position
-  mapTop: string;
-  mapLeft: string;
+  routeName: string;
+  from?: string;
+  to?: string;
+  heading?: string;
+  type?: string;
+  latitude: number;
+  longitude: number;
+  status?: BusStatus;
+  lastUpdated?: string;
+  distanceKm?: number;
 };
 
-// ── Single source of truth — map markers derive from this ────────────────────
-const SEED_BUSES: BusEntry[] = [
-  { id: "Bus 12", route: "Route 1", routeDesc: "Colombo Fort → Kandy",   driver: "A. Perera",      status: "On Time",   speed: 42, eta: "3 min",  mapTop: "31%", mapLeft: "14%" },
-  { id: "Bus 45", route: "Route 2", routeDesc: "Colombo Fort → Gampaha", driver: "S. Silva",       status: "On Time",   speed: 38, eta: "9 min",  mapTop: "22%", mapLeft: "52%" },
-  { id: "Bus 88", route: "Route 3", routeDesc: "Colombo Fort → Negombo", driver: "K. Fernando",    status: "Breakdown", speed: 0,  eta: "—",      mapTop: "38%", mapLeft: "68%" },
-  { id: "Bus 21", route: "Route 4", routeDesc: "Pettah → Maharagama",    driver: "R. Wijewardena", status: "Delayed",   speed: 12, eta: "35 min", mapTop: "47%", mapLeft: "46%" },
-  { id: "Bus 35", route: "Route 5", routeDesc: "Nugegoda → Moratuwa",    driver: "T. Bandara",     status: "On Time",   speed: 45, eta: "6 min",  mapTop: "59%", mapLeft: "20%" },
-];
-
-// ── Consistent color tokens keyed by status ───────────────────────────────────
-const STATUS_MARKER_BG: Record<BusStatus, string> = {
-  "On Time":   "bg-[#122843]",
-  "Delayed":   "bg-amber-500",
-  "Breakdown": "bg-red-500",
-};
-const STATUS_DOT: Record<BusStatus, string> = {
-  "On Time":   "bg-[#61de9f]",
-  "Delayed":   "bg-amber-200",
-  "Breakdown": "bg-red-200",
-};
-const STATUS_BADGE: Record<BusStatus, string> = {
-  "On Time":   "bg-[#61de9f] text-[#00796b]",
-  "Delayed":   "bg-yellow-100 text-yellow-700",
-  "Breakdown": "bg-red-100 text-red-600",
-};
-const LEGEND_DOT: Record<BusStatus, string> = {
-  "On Time":   "bg-[#61de9f]",
-  "Delayed":   "bg-amber-400",
-  "Breakdown": "bg-red-400",
+type LiveTrackingResponse = {
+  buses: Bus[];
+  pollingIntervalSeconds?: number;
 };
 
-const ALL_ROUTES = [...new Set(SEED_BUSES.map((b) => b.route))];
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeBus(raw: unknown, index: number): Bus | null {
+  if (!isObject(raw)) return null;
+  const location = isObject(raw.location) ? raw.location : null;
+  const latitude = toNumber(raw.latitude ?? raw.lat ?? location?.latitude);
+  const longitude = toNumber(raw.longitude ?? raw.lng ?? raw.lon ?? location?.longitude);
+  if (latitude === null || longitude === null) return null;
+
+  const routeName =
+    typeof raw.routeName === "string" ? raw.routeName :
+    typeof raw.route === "string" ? raw.route :
+    typeof raw.routeNumber === "string" ? raw.routeNumber : "Unknown route";
+
+  const id =
+    typeof raw.id === "string" ? raw.id :
+    typeof raw.registrationNumber === "string" ? raw.registrationNumber :
+    `bus-${index + 1}`;
+
+  return {
+    id,
+    routeName,
+    from: typeof raw.from === "string" ? raw.from : undefined,
+    to: typeof raw.to === "string" ? raw.to : undefined,
+    heading: typeof raw.heading === "string" ? raw.heading : undefined,
+    type: typeof raw.type === "string" ? raw.type : undefined,
+    latitude,
+    longitude,
+    status: typeof raw.status === "string" ? raw.status : undefined,
+    lastUpdated:
+      typeof raw.lastUpdated === "string" ? raw.lastUpdated :
+      typeof raw.timestamp === "string" ? raw.timestamp : undefined,
+    distanceKm: toNumber(raw.distanceKm ?? raw.distance_km ?? raw.distance) ?? undefined,
+  };
+}
+
+function parseLiveTrackingResponse(payload: unknown): LiveTrackingResponse {
+  if (!isObject(payload)) return { buses: [] };
+  const rootData = isObject(payload.data) ? payload.data : payload;
+  const busesSource =
+    Array.isArray(rootData.buses) ? rootData.buses :
+    Array.isArray(rootData.items) ? rootData.items :
+    Array.isArray(payload) ? payload : [];
+  const pollingIntervalSeconds = toNumber(
+    rootData.pollingIntervalSeconds ?? payload.pollingIntervalSeconds,
+  );
+  return {
+    buses: busesSource
+      .map((b, i) => normalizeBus(b, i))
+      .filter((b): b is Bus => b !== null),
+    pollingIntervalSeconds: pollingIntervalSeconds ?? undefined,
+  };
+}
+
+// ── Map (dynamic — no SSR) ───────────────────────────────────────────────────
+
+const FleetMap = dynamic(() => import("@/app/admin/fleetMonitor/FleetMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center bg-[#e8f4e8] text-sm text-slate-500">
+      Loading map…
+    </div>
+  ),
+});
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+const DEFAULT_POLL = 15;
 
 export default function FleetMonitorPage() {
-  const [search,       setSearch]       = useState("");
-  const [routeFilter,  setRouteFilter]  = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [refreshing,   setRefreshing]   = useState(false);
+  const [buses, setBuses]               = useState<Bus[]>([]);
+  const [pollInterval, setPollInterval] = useState(DEFAULT_POLL);
+  const [isLoading, setIsLoading]       = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+  const [lastSync, setLastSync]         = useState<string | null>(null);
+  const [search, setSearch]             = useState("");
+  const [focusBusId, setFocusBusId]     = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return SEED_BUSES.filter((b) => {
-      const mQ = !q || b.id.toLowerCase().includes(q) || b.route.toLowerCase().includes(q) || b.driver.toLowerCase().includes(q);
-      const mR = !routeFilter  || b.route  === routeFilter;
-      const mS = !statusFilter || b.status === statusFilter;
-      return mQ && mR && mS;
-    });
-  }, [search, routeFilter, statusFilter]);
+  const timerRef = useRef<number | null>(null);
 
-  // Live status counts always from full SEED (not filtered) — matches Figma
-  const onTime    = SEED_BUSES.filter((b) => b.status === "On Time").length;
-  const delayed   = SEED_BUSES.filter((b) => b.status === "Delayed").length;
-  const breakdown = SEED_BUSES.filter((b) => b.status === "Breakdown").length;
+  const fetchBuses = useCallback(async (silent = false) => {
+    const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
+    if (!token) { setError("Please log in as admin."); setIsLoading(false); return; }
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
-  };
+    if (!silent) setIsRefreshing(true);
+    try {
+      // /buses/live/all — admin-only endpoint, returns every active bus with no radius filter
+      const res = await api.get("/buses/live/all", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const parsed = parseLiveTrackingResponse(res.data);
+      setBuses(parsed.buses);
+      if (parsed.pollingIntervalSeconds) setPollInterval(parsed.pollingIntervalSeconds);
+      setLastSync(new Date().toLocaleTimeString());
+      setError(null);
+    } catch {
+      setError("Unable to fetch live buses.");
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchBuses();
+    timerRef.current = window.setInterval(() => void fetchBuses(true), pollInterval * 1000);
+    return () => { if (timerRef.current) window.clearInterval(timerRef.current); };
+  }, [fetchBuses, pollInterval]);
+
+  const query = search.trim().toLowerCase();
+  const filteredBuses = query
+    ? buses.filter(b =>
+        b.id.toLowerCase().includes(query) ||
+        b.routeName.toLowerCase().includes(query),
+      )
+    : buses;
+
+  // Status counts (always from full list)
+  const counts = { active: 0, stale: 0, inactive: 0 };
+  buses.forEach(b => {
+    const s = (b.status ?? "active").toLowerCase();
+    if (s === "stale") counts.stale++;
+    else if (s === "inactive") counts.inactive++;
+    else counts.active++;
+  });
 
   return (
-    <div className="p-6 bg-slate-50 min-h-screen">
+    // Full-bleed: takes up whatever space the admin shell gives it
+    <div className="relative flex h-full w-full flex-col overflow-hidden">
 
-      {/* ── Page header ── */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-[#122843]">Fleet Monitor</h1>
-        <p className="text-sm text-[#94a0ae] mt-0.5">Real time GPS tracking of all buses</p>
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex items-center gap-2 bg-white border border-[#828282]/40 rounded-lg px-3 py-2 w-72 shadow-sm">
-          <img src="/icons/lens.png" className="w-5 h-5 opacity-50" alt="" />
-          <input
-            type="text"
-            placeholder="Search bus number or route..."
-            className="flex-1 text-sm bg-transparent outline-none text-black"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {/* ── Error banner ── */}
+      {error && (
+        <div className="absolute inset-x-0 top-0 z-[1000] border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {error}
         </div>
+      )}
 
-        <select
-          className="h-10 border border-[#828282]/40 rounded-lg px-3 bg-white text-sm text-black shadow-sm"
-          value={routeFilter}
-          onChange={(e) => setRouteFilter(e.target.value)}
-        >
-          <option value="">All Routes</option>
-          {ALL_ROUTES.map((r) => <option key={r}>{r}</option>)}
-        </select>
-
-        <select
-          className="h-10 border border-[#828282]/40 rounded-lg px-3 bg-white text-sm text-black shadow-sm"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Status</option>
-          <option>On Time</option>
-          <option>Delayed</option>
-          <option>Breakdown</option>
-        </select>
-
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="ml-auto h-10 bg-[#4CAF8A] text-white font-semibold px-6 rounded-lg hover:bg-[#3d9e7a] transition disabled:opacity-60 shadow-sm"
-        >
-          {refreshing ? "Refreshing..." : "Refresh"}
-        </button>
+      {/* ── Map (full area) ── */}
+      <div className="flex-1">
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center bg-[#e8f4e8] text-sm text-slate-500">
+            Loading live buses…
+          </div>
+        ) : (
+          <FleetMap buses={filteredBuses} focusBusId={focusBusId} />
+        )}
       </div>
 
-      {/* ── Main layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+      {/* ── Floating search bar overlay ── */}
+      <div className="pointer-events-none absolute inset-x-0 top-4 z-[900] flex justify-center px-4">
+        <div className="pointer-events-auto w-full max-w-md rounded-xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur-sm">
 
-        {/* ── Map panel ── */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="relative h-[460px] bg-[#e8f0e4]">
-
-            {/* Road lines */}
-            <div className="absolute top-[35%] left-[10%] w-[80%] h-0.5 bg-[#b5c9a8] rounded" />
-            <div className="absolute top-[20%] left-[40%] w-0.5 h-[62%] bg-[#b5c9a8] rounded" />
-            <div className="absolute top-[55%] left-[15%] w-[38%] h-0.5 bg-[#b5c9a8] rounded" />
-            <div className="absolute top-[25%] left-[55%] w-[30%] h-0.5 bg-[#b5c9a8] rounded" />
-
-            {/* Bus markers — driven by SEED_BUSES so always consistent */}
-            {SEED_BUSES.map((bus) => (
-              <div
-                key={bus.id}
-                className={`absolute flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-white ${STATUS_MARKER_BG[bus.status]}`}
-                style={{ top: bus.mapTop, left: bus.mapLeft }}
+          {/* Search input row */}
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search bus number"
+              className="flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setFocusBusId(null); }}
+              onKeyDown={e => {
+                if (e.key === "Enter" && filteredBuses.length >= 1) {
+                  setFocusBusId(filteredBuses[0].id);
+                }
+              }}
+            />
+            {search ? (
+              <button
+                onClick={() => { setSearch(""); setFocusBusId(null); }}
+                className="text-slate-400 hover:text-slate-600"
+                aria-label="Clear search"
               >
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[bus.status]}`} />
-                {bus.id}
-              </div>
-            ))}
-
-            {/* Live Status panel */}
-            <div className="absolute top-3 right-3 bg-white rounded-xl border border-gray-200 p-3 min-w-[150px] shadow-sm">
-              <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wide mb-2">Live Status</p>
-              {(["On Time", "Delayed", "Breakdown"] as BusStatus[]).map((s) => {
-                const count = s === "On Time" ? onTime : s === "Delayed" ? delayed : breakdown;
-                return (
-                  <div key={s} className="flex items-center justify-between gap-6 mb-1 last:mb-0">
-                    <div className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${LEGEND_DOT[s]}`} />
-                      <span className="text-[11px] text-gray-500">{s}</span>
-                    </div>
-                    <span className="text-xs font-extrabold text-[#122843]">{count}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Map coming soon */}
-            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/80 rounded-lg px-4 py-2 text-center border border-gray-200">
-              <p className="text-xs font-semibold text-gray-600">Map integration coming soon</p>
-              <p className="text-[10px] text-gray-400">GPS tracking will appear here</p>
-            </div>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                onClick={() => void fetchBuses()}
+                disabled={isRefreshing}
+                className="rounded-md bg-[#122843] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#1a3a5c] disabled:opacity-50"
+              >
+                {isRefreshing ? "…" : "Refresh"}
+              </button>
+            )}
           </div>
 
-          {/* Legend */}
-          <div className="flex gap-5 px-5 py-3 border-t border-gray-100">
-            {(["On Time", "Delayed", "Breakdown"] as BusStatus[]).map((s) => (
-              <div key={s} className="flex items-center gap-1.5">
-                <div className={`w-2.5 h-2.5 rounded-full ${LEGEND_DOT[s]}`} />
-                <span className="text-xs text-gray-500">{s}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Right panel ── */}
-        <div className="flex flex-col gap-4">
-
-          {/* Active buses count */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-            <img src="/icons/fleet.png" className="w-12 h-12 object-contain" alt="buses" />
-            <div>
-              <p className="text-3xl font-extrabold text-black">{SEED_BUSES.length}</p>
-              <p className="text-[#94a0ae] text-sm">Active Buses</p>
+          {/* Meta row */}
+          <div className="flex items-center justify-between border-t border-slate-100 px-3 py-1.5">
+            <div className="flex items-center gap-3">
+              <StatusPill label="Active"   count={counts.active}   color="emerald" />
+              <StatusPill label="Stale"    count={counts.stale}    color="amber"   />
+              <StatusPill label="Inactive" count={counts.inactive} color="red"     />
             </div>
+            <p className="text-[11px] text-slate-400">
+              {lastSync ? <>sync {lastSync}</> : `polling ${pollInterval}s`}
+            </p>
           </div>
 
-          {/* Bus list — filtered by toolbar */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex-1">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <span className="text-sm font-extrabold text-[#122843]">Active Buses</span>
-              <span className="text-xs text-[#94a0ae]">{filtered.length} buses</span>
+          {/* Dropdown results — only shown when searching */}
+          {query && (
+            <div className="max-h-52 overflow-y-auto border-t border-slate-100">
+              {filteredBuses.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-slate-400">No buses match "{search}"</p>
+              ) : filteredBuses.map(bus => (
+                <button
+                  key={bus.id}
+                  onClick={() => { setFocusBusId(bus.id); }}
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50 ${focusBusId === bus.id ? "bg-blue-50" : ""}`}
+                >
+                  <span className="text-sm font-semibold text-[#122843]">{bus.id}</span>
+                  <span className="flex-1 truncate text-xs text-slate-500">
+                    {bus.routeName}{bus.from && bus.to ? ` · ${bus.from} → ${bus.to}` : ""}
+                  </span>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusClasses(bus.status)}`}>
+                    {bus.status ?? "active"}
+                  </span>
+                </button>
+              ))}
             </div>
-
-            <div className="divide-y divide-gray-50 max-h-[360px] overflow-y-auto">
-              {filtered.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-10">No buses match filters.</p>
-              ) : (
-                filtered.map((bus) => (
-                  <div
-                    key={bus.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition cursor-pointer"
-                  >
-                    <img src="/icons/fleet.png" className="w-12 h-12 object-contain flex-shrink-0" alt="bus" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-extrabold text-[#122843]">{bus.id}</p>
-                      <p className="text-xs text-[#94a0ae]">{bus.route}</p>
-                    </div>
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase whitespace-nowrap ${STATUS_BADGE[bus.status]}`}>
-                      {bus.status}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function statusClasses(status?: string) {
+  const s = (status ?? "active").toLowerCase();
+  if (s === "inactive") return "bg-red-100 text-red-600 border-red-200";
+  if (s === "stale")    return "bg-amber-100 text-amber-700 border-amber-200";
+  return "bg-emerald-100 text-emerald-700 border-emerald-200";
+}
+
+function StatusPill({ label, count, color }: { label: string; count: number; color: "emerald" | "amber" | "red" }) {
+  const cls = {
+    emerald: "text-emerald-700",
+    amber:   "text-amber-600",
+    red:     "text-red-500",
+  }[color];
+  return (
+    <div className={`flex items-center gap-1 text-[11px] font-medium ${cls}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {count} {label}
     </div>
   );
 }
