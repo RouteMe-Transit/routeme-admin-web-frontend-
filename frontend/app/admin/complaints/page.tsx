@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import api from "@/app/services/api";
 import { IoSearch, IoEye } from "react-icons/io5";
 import { FiAlertOctagon, FiCheckCircle, FiMessageCircle } from "react-icons/fi";
@@ -71,6 +72,63 @@ export default function AdminComplaints() {
     };
   };
 
+  const [page, setPage] = useState(1);
+  const [limit] = useState(50);
+
+  const fetchComplaints = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const params: any = { page, limit };
+      if (statusFilter && statusFilter !== "All") params.status = statusFilter;
+      if (categoryFilter && categoryFilter !== "All") params.category = categoryFilter;
+      if (search) params.search = search;
+
+      const config = { params, ...(getAuthConfig() as any) };
+      const response = await api.get("/complaints", config);
+      const rawData = response.data?.data || response.data;
+      const complaintsArray = Array.isArray(rawData)
+        ? rawData
+        : rawData?.complaints ?? [];
+      const normalized = complaintsArray.map((item: any) => ({
+        id: item.id?.toString() || "",
+        displayId: formatComplaintId(item.id?.toString() || ""),
+        passenger:
+          item.passenger ||
+          (item.user?.firstName && item.user?.lastName
+            ? `${item.user.firstName} ${item.user.lastName}`
+            : item.user?.email || "Unknown Passenger"),
+        category: item.category || "",
+        bus: item.bus || item.busNumber || "",
+        message: item.message || item.description || "",
+        date: item.date || new Date(item.createdAt).toLocaleDateString(),
+        status: item.status || "Pending",
+        user: item.user,
+        busNumber: item.busNumber,
+        description: item.description,
+        createdAt: item.createdAt,
+      }));
+      setComplaints(normalized);
+    } catch (err: any) {
+      toast.error("Unable to load complaints. Please refresh the page.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // debounce search and filters
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1);
+      fetchComplaints();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search, statusFilter, categoryFilter]);
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [page]);
+
   const toggleStatus = async (id: string) => {
     try {
       const current = complaints.find((item) => item.id === id);
@@ -91,64 +149,21 @@ export default function AdminComplaints() {
             : item
         )
       );
+      toast.success(`Complaint ${newStatus}`);
     } catch (err: any) {
       const message =
         err?.response?.data?.message ||
         err?.message ||
         "Unable to update complaint status. Please try again.";
-      setError(message);
+      toast.error(message);
     }
   };
 
   useEffect(() => {
-    const fetchComplaints = async () => {
-      setIsLoading(true);
-      setError("");
-      try {
-        const config = getAuthConfig();
-        const response = await api.get("/complaints", config);
-        const rawData = response.data?.data || response.data;
-        const complaintsArray =
-          Array.isArray(rawData) ? rawData : rawData?.complaints ?? [];
-        const normalized = complaintsArray.map((item: any) => ({
-          id: item.id?.toString() || "",
-          displayId: formatComplaintId(item.id?.toString() || ""),
-          passenger:
-            item.passenger ||
-            (item.user?.firstName && item.user?.lastName
-              ? `${item.user.firstName} ${item.user.lastName}`
-              : item.user?.email || "Unknown Passenger"),
-          category: item.category || "",
-          bus: item.bus || item.busNumber || "",
-          message: item.message || item.description || "",
-          date: item.date || new Date(item.createdAt).toLocaleDateString(),
-          status: item.status || "Pending",
-          user: item.user,
-          busNumber: item.busNumber,
-          description: item.description,
-          createdAt: item.createdAt,
-        }));
-        setComplaints(normalized);
-      } catch (err: any) {
-        setError("Unable to load complaints. Please refresh the page.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchComplaints();
   }, []);
 
-  const filteredComplaints = complaints.filter((item) => {
-    const matchSearch =
-      item.passenger.toLowerCase().includes(search.toLowerCase()) ||
-      item.message.toLowerCase().includes(search.toLowerCase()) ||
-      item.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "All" || item.status === statusFilter;
-    const matchCategory =
-      categoryFilter === "All" || item.category === categoryFilter;
-    return matchSearch && matchStatus && matchCategory;
-  });
+  const filteredComplaints = complaints; // server-side search/filters applied
 
   return (
     <div className="min-h-screen bg-[#f5f7fa] p-6">
@@ -218,7 +233,7 @@ export default function AdminComplaints() {
       {/* TABLE */}
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <div className="min-w-max grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+          <div className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
             <div>ID</div>
             <div>Passenger</div>
             <div>Category</div>
@@ -242,7 +257,7 @@ export default function AdminComplaints() {
               filteredComplaints.map((item) => (
                 <div
                   key={item.id}
-                  className="min-w-max grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] items-center border-b px-5 py-3.5 text-sm transition-colors hover:bg-blue-50/30"
+                  className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] items-center border-b px-5 py-3.5 text-sm transition-colors hover:bg-blue-50/30"
                 >
                   <div className="font-mono text-xs font-bold tracking-wider text-gray-400">
                     {item.displayId ?? item.id}
@@ -252,7 +267,7 @@ export default function AdminComplaints() {
                   </div>
                   <div className="text-gray-700">{item.category}</div>
                   <div className="text-gray-700">{item.bus}</div>
-                  <div className="truncate text-gray-700 pr-2">{item.message}</div>
+                  <div className="min-w-0 pr-2 truncate text-gray-700">{item.message}</div>
                   <div className="font-mono text-xs text-gray-500">{item.date}</div>
                   <div>
                     <span
@@ -294,7 +309,7 @@ export default function AdminComplaints() {
       {/* MODAL */}
       {selectedComplaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg mx-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-lg mx-4">
             <h2 className="mb-4 text-lg font-bold">Complaint Details</h2>
             <p className="mb-1">
               <b>ID:</b> {selectedComplaint.displayId ?? selectedComplaint.id}
@@ -309,12 +324,15 @@ export default function AdminComplaints() {
               <b>Bus:</b> {selectedComplaint.bus}
             </p>
             <p className="mb-1">
-              <b>Date:</b> {selectedComplaint.date}
-            </p>
-            <p className="mt-2">
+              <b>Date:</b> {selectedComplaint.date}</p>
+
+            <div className="mt-2">
               <b>Message:</b>
-            </p>
-            <p className="text-gray-600 mt-1">{selectedComplaint.message}</p>
+              <div className="mt-2 bg-gray-100 p-3 rounded max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-gray-700">
+                {selectedComplaint.message}
+              </div>
+            </div>
+
             <div className="mt-4 text-right">
               <button
                 onClick={() => setSelectedComplaint(null)}

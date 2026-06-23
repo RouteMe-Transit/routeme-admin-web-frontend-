@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import api from "@/app/services/api";
+import { z } from "zod";
+import toast from "react-hot-toast";
 
 type Complaint = {
   id: number;
@@ -47,6 +49,20 @@ export default function PassengerComplaint() {
     setSuccess("");
     setIsSubmitting(true);
 
+    const schema = z.object({
+      category: z.string().min(1, "Please select a category"),
+      busNumber: z.string().min(1, "Please enter the bus number"),
+      description: z.string().min(10, "Description must be at least 10 characters"),
+    });
+
+    const parsed = schema.safeParse(formData);
+    if (!parsed.success) {
+      const msg = parsed.error.issues?.[0]?.message || "Invalid input";
+      toast.error(msg);
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const response = await api.post(
         "/complaints",
@@ -68,7 +84,7 @@ export default function PassengerComplaint() {
       };
 
       setComplaints([newComplaint, ...complaints]);
-      setSuccess("Complaint submitted successfully.");
+      toast.success("Complaint submitted successfully.");
       setFormData({
         category: "",
         busNumber: "",
@@ -80,6 +96,7 @@ export default function PassengerComplaint() {
         err?.response?.data?.message ||
         err?.message ||
         "Unable to submit complaint. Please try again.";
+      toast.error(message);
       setError(message);
     } finally {
       setIsSubmitting(false);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import api from "@/app/services/api";
 import { IoEye, IoSearch } from "react-icons/io5";
 import { FiMessageCircle, FiStar, FiClock } from "react-icons/fi";
@@ -58,7 +59,11 @@ export default function AdminFeedback() {
       setError("");
 
       try {
-        const config = getAuthConfig();
+        const params: any = { page: 1, limit: 50 };
+        if (starFilter !== "all") params.rating = starFilter;
+        if (search) params.search = search;
+
+        const config = { params, ...(getAuthConfig() as any) };
         const response = await api.get("/feedbacks", config);
         const rawData = response.data?.data || response.data;
         const feedbacksArray = Array.isArray(rawData) ? rawData : rawData?.feedbacks ?? [];
@@ -86,30 +91,23 @@ export default function AdminFeedback() {
           console.error("Response status:", err.response.status);
           console.error("Response data:", err.response.data);
         }
-        setError("Unable to load feedbacks. Please refresh the page.");
+        toast.error("Unable to load feedbacks. Please refresh the page.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchFeedbacks();
+    const t = setTimeout(fetchFeedbacks, 350);
+    return () => clearTimeout(t);
   }, []);
 
-  // FILTER LOGIC
+  // Apply only client-side time filter; search and rating handled by server
   const filteredFeedbacks = feedbacks.filter((fb) => {
-    const matchesStars = starFilter === "all" || fb.stars === starFilter;
-
     const matchesTime =
       timeFilter === "all" ||
       (timeFilter === "today" && fb.date === today) ||
       (timeFilter === "month" && fb.date.startsWith(currentMonth));
-
-    const matchesSearch =
-      fb.name.toLowerCase().includes(search.toLowerCase()) ||
-      fb.comment.toLowerCase().includes(search.toLowerCase()) ||
-      fb.bus.toLowerCase().includes(search.toLowerCase());
-
-    return matchesStars && matchesTime && matchesSearch;
+    return matchesTime;
   });
 
   const stats = [
@@ -202,7 +200,7 @@ export default function AdminFeedback() {
 
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
         <div className="responsive-table">
-          <div className="min-w-max grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+          <div className="grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
             <div>ID</div>
             <div>Name</div>
             <div>Category</div>
@@ -254,7 +252,7 @@ export default function AdminFeedback() {
       {/* MODAL */}
       {selectedFeedback && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-lg">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-lg">
             <h2 className="mb-4 text-lg font-bold">Feedback Details</h2>
 
             <p><b>ID:</b> {selectedFeedback.displayId ?? selectedFeedback.id}</p>
@@ -264,8 +262,12 @@ export default function AdminFeedback() {
             <p><b>Date:</b> {selectedFeedback.date}</p>
             <p><b>Rating:</b> {renderStars(selectedFeedback.stars)}</p>
 
-            <p className="mt-2"><b>Comment:</b></p>
-            <p className="text-gray-600">{selectedFeedback.comment}</p>
+            <div className="mt-2">
+              <b>Comment:</b>
+              <div className="mt-2 bg-gray-100 p-3 rounded max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-gray-700">
+                {selectedFeedback.comment}
+              </div>
+            </div>
 
             <div className="mt-4 flex justify-end">
               <button
