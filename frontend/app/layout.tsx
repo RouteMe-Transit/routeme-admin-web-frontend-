@@ -6,11 +6,14 @@ import { Toaster } from "react-hot-toast";
 export const metadata: Metadata = {
   title: "RouteMe Bus Tracking App",
   description: "Track buses in real time with live route and ETA updates.",
-  viewport: {
+};
+
+export function generateViewport() {
+  return {
     width: "device-width",
     initialScale: 1,
-  },
-};
+  };
+}
 
 export default function RootLayout({
   children,

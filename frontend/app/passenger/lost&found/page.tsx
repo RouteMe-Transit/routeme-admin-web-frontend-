@@ -138,7 +138,6 @@ export default function LostFound() {
         <button
           className="w-full rounded-lg bg-green-500 px-6 py-3 text-white sm:w-auto"
           onClick={() => setShowModal(true)}
-          className="bg-green-500 text-white px-6 py-3 rounded-lg"
         >
           + Report Item
         </button>

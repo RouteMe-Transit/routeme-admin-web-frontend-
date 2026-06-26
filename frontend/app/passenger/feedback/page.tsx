@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import api from "@/app/services/api";
+import { z } from "zod";
+import toast from "react-hot-toast";
 
 type Submission = {
   id: number;
@@ -12,24 +14,6 @@ type Submission = {
   meta: string;
 };
 
-const initialSubmissions: Submission[] = [
-  {
-    id: 1,
-    name: "R. Rathnayaka",
-    category: "Punctuality",
-    rating: 4,
-    message: "Bus 45 was late but driver informed passengers.",
-    meta: "Mar 4 · Bus 45",
-  },
-  {
-    id: 2,
-    name: "M. Nawodya",
-    category: "Cleanliness",
-    rating: 3,
-    message: "Seats could be cleaner. Good service overall.",
-    meta: "Mar 3 · Bus 12",
-  },
-];
 
 const getAuthConfig = () => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -46,8 +30,7 @@ export default function PassengerFeedback() {
     rating: 0,
   });
 
-  const [submissions, setSubmissions] =
-    useState<Submission[]>(initialSubmissions);
+  // submissions removed — recent submissions UI was removed per request
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +61,25 @@ export default function PassengerFeedback() {
     setError("");
     setSuccess("");
     setIsSubmitting(true);
+    const schema = z.object({
+      category: z.string().min(1, "Please select a category"),
+      busNumber: z.string().min(1, "Please enter the bus number"),
+      message: z.string().min(10, "Message must be at least 10 characters"),
+      rating: z.number().min(1, "Please give a rating"),
+    });
+
+    const parsed = schema.safeParse({
+      category: formData.category,
+      busNumber: formData.busNumber,
+      message: formData.message,
+      rating: formData.rating,
+    });
+
+    if (!parsed.success) {
+      toast.error(parsed.error.issues?.[0]?.message || "Invalid input");
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const response = await api.post(
@@ -92,17 +94,7 @@ export default function PassengerFeedback() {
       );
 
       const createdFeedback = response.data?.data || response.data;
-      const newSubmission: Submission = {
-        id: createdFeedback?.id || submissions.length + 1,
-        name: "You",
-        category: formData.category,
-        rating: formData.rating,
-        message: formData.message,
-        meta: `Now · ${formData.busNumber}`,
-      };
-
-      setSubmissions([newSubmission, ...submissions]);
-      setSuccess("Feedback submitted successfully.");
+      toast.success("Feedback submitted successfully.");
       setFormData({
         category: "",
         busNumber: "",
@@ -111,7 +103,9 @@ export default function PassengerFeedback() {
       });
     } catch (err: any) {
       console.error(err);
-      setError("Unable to submit feedback. Please try again.");
+      const msg = err?.response?.data?.message || "Unable to submit feedback. Please try again.";
+      toast.error(msg);
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -213,33 +207,7 @@ export default function PassengerFeedback() {
         </form>
       </div>
 
-      {/* RECENT SUBMISSIONS */}
-      <div className="w-full max-w-5xl mt-10">
-        <h3 className="text-xl font-bold mb-4">Recent Submissions</h3>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          {submissions.map((item) => (
-            <div
-              key={item.id}
-              className="bg-white p-4 rounded-lg border shadow-sm"
-            >
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-semibold">{item.name}</h4>
-                <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">
-                  {item.category}
-                </span>
-              </div>
-
-              <div className="text-yellow-500 mb-1">
-                {"⭐".repeat(item.rating)}
-              </div>
-
-              <p className="text-sm text-gray-700">{item.message}</p>
-              <p className="text-xs text-gray-400 mt-1">{item.meta}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Recent submissions removed per request */}
     </div>
   );
 }
