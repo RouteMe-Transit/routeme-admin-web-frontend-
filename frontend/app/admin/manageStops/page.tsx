@@ -89,6 +89,27 @@ function formatStopId(rawId: number | string | null | undefined, prefix = "ST", 
   return text;
 }
 
+// ─── ID search parser ─────────────────────────────────────────────────────────
+// "ST0001", "ST1", plain digits "0001" / "1" → ?id=
+// Everything else → ?search= (stop name, etc.)
+function parseIdSearch(raw: string): { idQuery: string; textQuery: string } {
+  const trimmed = raw.trim().toUpperCase();
+
+  // Matches: ST0001, ST1
+  const prefixMatch = trimmed.match(/^ST(\d+)$/);
+  if (prefixMatch) {
+    return { idQuery: String(parseInt(prefixMatch[1], 10)), textQuery: "" };
+  }
+
+  // Plain digits: "0001", "1", "42"
+  if (/^\d+$/.test(trimmed)) {
+    return { idQuery: String(parseInt(trimmed, 10)), textQuery: "" };
+  }
+
+  // Anything else is a text search (stop name, etc.)
+  return { idQuery: "", textQuery: raw.trim() };
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
@@ -159,32 +180,76 @@ export default function AdminManageStopsPage() {
   const [apiError,    setApiError]    = useState("");
   const [submitting,  setSubmitting]  = useState(false);
 
+  // ── Pagination state ───────────────────────────────────────────────────────
+  const [page,       setPage]       = useState(1);
+  const [limit,      setLimit]      = useState(10);
+  const [totalStops, setTotalStops] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // ── Stats state ────────────────────────────────────────────────────────────
+  const [statsData, setStatsData] = useState({ total: 0, active: 0, inactive: 0 });
+
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; message: string;
     confirmLabel: string; confirmClass: string; onConfirm: () => void;
   }>({ open: false, title: "", message: "", confirmLabel: "", confirmClass: "", onConfirm: () => {} });
 
-  // ── Load stops ─────────────────────────────────────────────────────────────
-  const loadStops = useCallback(async () => {
+  // ── Load stats ─────────────────────────────────────────────────────────────
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ total: number; active: number; inactive: number }>("/stops/stats");
+      setStatsData(res);
+    } catch { /* non-critical */ }
+  }, []);
+
+  // ── Load stops — server-side search + pagination ───────────────────────────
+  const loadStops = useCallback(async (opts?: { search?: string; signal?: AbortSignal }) => {
     try {
       setLoading(true);
-      const res = await apiFetch<{ stops: Stop[] }>("/stops");
+      const params = new URLSearchParams();
+
+      // ── Smart ID / text search ─────────────────────────────────────────────
+      // "ST0001", "ST1", "1", "0001" → ?id=   |   anything else → ?search=
+      if (opts?.search) {
+        const { idQuery, textQuery } = parseIdSearch(opts.search);
+        if (idQuery)   params.set("id",     idQuery);
+        if (textQuery) params.set("search", textQuery);
+      }
+
+      params.set("page",  String(page));
+      params.set("limit", String(limit));
+
+      const res = await apiFetch<{ total: number; totalPages: number; stops: Stop[] }>(
+        `/stops?${params.toString()}`,
+        { signal: opts?.signal }
+      );
       setStops(res.stops ?? []);
-    } catch {
-      // keep existing state
+      setTotalStops(res.total ?? 0);
+      setTotalPages(res.totalPages ?? 1);
+    } catch (err) {
+      const isAbort = (err as any)?.name === "AbortError";
+      if (!isAbort) toast.error(err instanceof Error ? err.message : "Failed to load stops");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, limit]);
 
-  useEffect(() => { loadStops(); }, [loadStops]);
+  // ── Debounced search (matches bus page pattern) ────────────────────────────
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      loadStops({ search: search.trim() || undefined, signal: controller.signal });
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [search, loadStops]);
 
-  // ── Derived stats ─────────────────────────────────────────────────────────
-  const totalStops    = stops.length;
-  const activeStops   = stops.filter((s) => s.isActive).length;
-  const inactiveStops = stops.filter((s) => !s.isActive).length;
+  // Reset to page 1 on search change
+  useEffect(() => { setPage(1); }, [search]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // Initial stats load
+  useEffect(() => { loadStats(); }, [loadStats]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -215,7 +280,8 @@ export default function AdminManageStopsPage() {
         await apiFetch("/stops", { method: "POST", body: JSON.stringify(formData) });
         toast.success(`${formData.stopName} added successfully`);
       }
-      await loadStops();
+      await loadStops({ search: search.trim() || undefined });
+      await loadStats();
       setFormData(emptyForm()); setShowModal(false); setEditId(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
@@ -237,7 +303,8 @@ export default function AdminManageStopsPage() {
         setConfirmState((s) => ({ ...s, open: false }));
         try {
           await apiFetch(`/stops/${stop.id}/toggle`, { method: "PATCH" });
-          await loadStops();
+          await loadStops({ search: search.trim() || undefined });
+          await loadStats();
           toast.success(`"${stop.stopName}" ${nextActive ? "activated" : "suspended"}`);
         } catch {
           toast.error("Failed to update stop status");
@@ -246,9 +313,7 @@ export default function AdminManageStopsPage() {
     });
   };
 
-  const filteredStops = stops.filter((s) =>
-    s.stopName.toLowerCase().includes(search.toLowerCase())
-  );
+  const safePage = Math.min(page, Math.max(1, totalPages));
 
   const fe = (key: string) => fieldErrors[key];
   const ic = (key: string) => (fe(key) ? inputError : inputNormal);
@@ -262,13 +327,13 @@ export default function AdminManageStopsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard
             icon={<IoLocationSharp className="w-5 h-5 text-blue-500"    />}
-            bg="bg-blue-50"    value={totalStops}    label="Total Stops"      color="text-blue-600"    />
+            bg="bg-blue-50"    value={statsData.total}    label="Total Stops"      color="text-blue-600"    />
           <StatCard
             icon={<FiCheckCircle  className="w-5 h-5 text-emerald-500" />}
-            bg="bg-emerald-50" value={activeStops}   label="Active Stops"     color="text-emerald-600" />
+            bg="bg-emerald-50" value={statsData.active}   label="Active Stops"     color="text-emerald-600" />
           <StatCard
             icon={<FiAlertOctagon className="w-5 h-5 text-amber-500"   />}
-            bg="bg-amber-50"   value={inactiveStops} label="Suspended Stops"  color="text-amber-600"   />
+            bg="bg-amber-50"   value={statsData.inactive} label="Suspended Stops"  color="text-amber-600"   />
         </div>
 
         {/* ── TOOLBAR ── */}
@@ -278,11 +343,16 @@ export default function AdminManageStopsPage() {
               <FaMagnifyingGlass className="w-4 h-4 opacity-50" aria-hidden="true" />
               <input
                 type="text"
-                placeholder="Search stops..."
+                placeholder="Search stops or ST0001…"
                 className="flex-1 text-sm bg-transparent outline-none text-black"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              {search && (
+                <button onClick={() => setSearch("")} className="text-gray-400 hover:text-gray-600" aria-label="Clear search">
+                  <FaXmark className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <button
               onClick={openAddModal}
@@ -312,10 +382,12 @@ export default function AdminManageStopsPage() {
               {/* Body */}
               {loading ? (
                 <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading stops...</div>
-              ) : filteredStops.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500 text-sm">No stops found</div>
+              ) : stops.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                  {search ? `No stops found for "${search}"` : "No stops found"}
+                </div>
               ) : (
-                filteredStops.map((stop) => (
+                stops.map((stop) => (
                   <div key={stop.id}
                     className="grid grid-cols-[100px_1fr_130px_130px_100px_116px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition">
 
@@ -361,20 +433,68 @@ export default function AdminManageStopsPage() {
             </div>
           </div>
         </div>
+
+        {/* ── PAGINATION ── */}
+        {!loading && totalStops > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-gray-600">
+              Showing {(safePage - 1) * limit + 1} to {Math.min(safePage * limit, totalStops)} of {totalStops} stops
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((v) => Math.max(1, v - 1))}
+                disabled={safePage <= 1}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setPage(pageNumber)}
+                    className={`min-w-9 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      pageNumber === safePage
+                        ? "bg-[#4CAF8A] text-white"
+                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPage((v) => Math.min(totalPages, v + 1))}
+                disabled={safePage >= totalPages}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <select
+                value={limit}
+                onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                className="h-9 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          ADD / EDIT MODAL
+          ADD / EDIT MODAL  (no close X in header — Cancel button at bottom)
       ══════════════════════════════════════════════════════════════════════ */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
 
-            <button type="button" aria-label="Close modal" onClick={() => setShowModal(false)}
-              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white">
-              <FaXmark />
-            </button>
-
+            {/* ── Modal header (no X button) ── */}
             <div className="mb-5 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[#122843] flex items-center justify-center flex-shrink-0">
                 {editId !== null

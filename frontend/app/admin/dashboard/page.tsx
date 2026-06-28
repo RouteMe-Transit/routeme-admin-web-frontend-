@@ -8,11 +8,11 @@ import {
   FiUsers,
   FiAlertOctagon,
   FiCheckCircle,
+  FiStar,
 } from "react-icons/fi";
-import { IoEye } from "react-icons/io5";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type BusStatus = "On Time" | "Delayed" | "Breakdown";
+type BusStatus = "Active" | "Maintenance" | "Breakdown";
 
 type FleetBus = {
   id: number;
@@ -21,7 +21,6 @@ type FleetBus = {
   routeFromTo: string;
   driverName: string;
   status: BusStatus;
-  eta: string | null;
 };
 
 type NewsItem = {
@@ -44,11 +43,12 @@ type ComplaintItem = {
 type DashboardStats = {
   activeBuses: number;
   activeRoutes: number;
-  passengersToday: number;
+  totalPassengers: number;
   newComplaints: number;
-  onTimeRate: number;
+  avgRating: number;
+  // system summary
   fleetHealth: number;
-  routeCoverage: number;
+  resolvedComplaints: number;
   activeStops: number;
   totalUsers: number;
 };
@@ -93,15 +93,15 @@ const todayLabel = () =>
 
 // ─── Status badge styles ──────────────────────────────────────────────────────
 const STATUS_BADGE: Record<BusStatus, string> = {
-  "On Time":   "bg-emerald-100 text-emerald-700 border border-emerald-200",
-  "Delayed":   "bg-amber-100  text-amber-700   border border-amber-200",
-  "Breakdown": "bg-red-100    text-red-700     border border-red-200",
+  Active:      "bg-emerald-100 text-emerald-700 border border-emerald-200",
+  Maintenance: "bg-amber-100  text-amber-700   border border-amber-200",
+  Breakdown:   "bg-red-100    text-red-700     border border-red-200",
 };
 
 const STATUS_DOT: Record<BusStatus, string> = {
-  "On Time":   "bg-emerald-500",
-  "Delayed":   "bg-amber-400",
-  "Breakdown": "bg-red-500",
+  Active:      "bg-emerald-500",
+  Maintenance: "bg-amber-400",
+  Breakdown:   "bg-red-500",
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -111,18 +111,12 @@ function StatCard({
   value,
   label,
   color,
-  badge,
-  badgeBg,
-  badgeColor,
 }: {
   icon: React.ReactNode;
   bg: string;
   value: string | number;
   label: string;
   color: string;
-  badge?: string;
-  badgeBg?: string;
-  badgeColor?: string;
 }) {
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-3 hover:shadow-md transition-shadow duration-200">
@@ -134,14 +128,6 @@ function StatCard({
           {value}
         </p>
         <p className="text-xs text-gray-500 font-semibold mt-1">{label}</p>
-        {badge && (
-          <span
-            className="inline-block mt-1 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide"
-            style={{ background: badgeBg, color: badgeColor }}
-          >
-            {badge}
-          </span>
-        )}
       </div>
     </div>
   );
@@ -191,17 +177,31 @@ function EmptyRow({ message }: { message: string }) {
   );
 }
 
+// ─── Star display ─────────────────────────────────────────────────────────────
+function StarRating({ rating }: { rating: number }) {
+  const full    = Math.floor(rating);
+  const hasHalf = rating - full >= 0.25 && rating - full < 0.75;
+  const empty   = 5 - full - (hasHalf ? 1 : 0);
+  return (
+    <span className="text-amber-400 text-sm tracking-tight">
+      {"★".repeat(full)}
+      {hasHalf ? "½" : ""}
+      {"☆".repeat(Math.max(0, empty))}
+    </span>
+  );
+}
+
 // ─── Default empty stats ──────────────────────────────────────────────────────
 const EMPTY_STATS: DashboardStats = {
-  activeBuses:     0,
-  activeRoutes:    0,
-  passengersToday: 0,
-  newComplaints:   0,
-  onTimeRate:      0,
-  fleetHealth:     0,
-  routeCoverage:   0,
-  activeStops:     0,
-  totalUsers:      0,
+  activeBuses:        0,
+  activeRoutes:       0,
+  totalPassengers:    0,
+  newComplaints:      0,
+  avgRating:          0,
+  fleetHealth:        0,
+  resolvedComplaints: 0,
+  activeStops:        0,
+  totalUsers:         0,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -220,61 +220,79 @@ export default function AdminDashboard() {
       setLoading(true);
 
       // ── Buses ──
-      const busRes  = await apiFetch<{ total: number; buses: any[] }>("/buses?limit=5");
-      const buses   = busRes.buses ?? [];
-      const activeBuses = buses.filter((b: any) => b.isActive).length;
+      const busRes    = await apiFetch<{ total: number; buses: any[] }>("/buses?limit=5");
+      const buses     = busRes.buses ?? [];
+      const allBusRes = await apiFetch<{ total: number; buses: any[] }>("/buses?limit=500");
+      const allBuses  = allBusRes.buses ?? [];
+      const activeBuses = allBuses.filter((b: any) => b.status === "Active").length;
+      const fleetTotal  = allBuses.length;
 
       // ── Routes ──
-      const routeRes   = await apiFetch<{ total: number; routes: any[] }>("/routes?limit=200");
-      const routes     = routeRes.routes ?? [];
+      const routeRes    = await apiFetch<{ total: number; routes: any[] }>("/routes?limit=200");
+      const routes      = routeRes.routes ?? [];
       const activeRoutes = routes.filter((r: any) => r.isActive).length;
 
       // ── Users ──
-      const userRes    = await apiFetch<{ total: number; users: any[] }>("/users");
+      const userRes    = await apiFetch<{ total: number; users: any[] }>("/users?limit=500");
       const users      = userRes.users ?? [];
       const passengers = users.filter((u: any) => u.role === "passenger").length;
 
       // ── Complaints ──
       const cmpRes  = await apiFetch<any>("/complaints");
       const rawCmp  = Array.isArray(cmpRes) ? cmpRes : cmpRes?.complaints ?? [];
-      const pending = rawCmp.filter((c: any) => c.status === "Pending").length;
+      const pending  = rawCmp.filter((c: any) => c.status === "Pending").length;
       const resolved = rawCmp.filter((c: any) => c.status === "Resolved").length;
-      const totalCmp = rawCmp.length;
-      const onTimeRate = totalCmp > 0 ? Math.round((resolved / totalCmp) * 100) : 0;
+
+      // ── Feedbacks — average rating ──
+      let avgRating = 0;
+      try {
+        const fbRes  = await apiFetch<any>("/feedbacks");
+        const rawFb  = Array.isArray(fbRes) ? fbRes : fbRes?.feedbacks ?? [];
+        if (rawFb.length > 0) {
+          const total = rawFb.reduce(
+            (sum: number, f: any) => sum + (f.stars ?? f.rating ?? 0),
+            0
+          );
+          avgRating = Math.round((total / rawFb.length) * 10) / 10;
+        }
+      } catch { /* feedbacks non-critical */ }
 
       // ── News ──
       const newsRes = await apiFetch<{ news: any[] }>("/news?limit=3");
       const newsArr = newsRes.news ?? [];
 
       // ── Stops ──
-      const stopRes  = await apiFetch<{ stops: any[] }>("/stops?activeOnly=true&limit=1");
-      const stopList = stopRes.stops ?? [];
+      const stopRes  = await apiFetch<{ total: number; stops: any[] }>("/stops?activeOnly=true&limit=500");
+      const activeStopsCount = stopRes.total ?? (stopRes.stops ?? []).length;
 
       // ── Set stats ──
       setStats({
         activeBuses,
         activeRoutes,
-        passengersToday: passengers,
-        newComplaints:   pending,
-        onTimeRate,
-        fleetHealth:     activeBuses > 0 ? Math.round((activeBuses / buses.length) * 100) : 0,
-        routeCoverage:   activeRoutes > 0 ? Math.round((activeRoutes / routes.length) * 100) : 0,
-        activeStops:     stopList.length,
-        totalUsers:      users.length,
+        totalPassengers:    passengers,
+        newComplaints:      pending,
+        avgRating,
+        fleetHealth:        fleetTotal > 0 ? Math.round((activeBuses / fleetTotal) * 100) : 0,
+        resolvedComplaints: resolved,
+        activeStops:        activeStopsCount,
+        totalUsers:         users.length,
       });
 
-      // ── Fleet rows ──
+      // ── Fleet rows (5 latest buses, real status) ──
       const fleetRows: FleetBus[] = buses.map((b: any) => {
         const route  = routes.find((r: any) => r.id === b.routeId);
         const driver = b.drivers?.[0];
+        const busStatus: BusStatus =
+          b.status === "Active"      ? "Active"
+          : b.status === "Maintenance" ? "Maintenance"
+          : "Breakdown";
         return {
           id:                 b.id,
           registrationNumber: b.registrationNumber,
           routeName:          route?.routeName ?? "—",
           routeFromTo:        route ? `${route.from} → ${route.to}` : "—",
           driverName:         driver?.name ?? "—",
-          status:             b.isActive ? "On Time" : "Breakdown",
-          eta:                null,
+          status:             busStatus,
         };
       });
       setFleet(fleetRows);
@@ -342,23 +360,23 @@ export default function AdminDashboard() {
         <StatCard
           icon={<FiUsers        className="w-5 h-5 text-orange-500"  />}
           bg="bg-orange-50"
-          value={stats.passengersToday.toLocaleString()}
-          label="Passengers Today"
+          value={(stats.totalPassengers ?? 0).toLocaleString()}
+          label="Total Passengers"
           color="text-orange-600"
         />
         <StatCard
           icon={<FiAlertOctagon className="w-5 h-5 text-red-500"    />}
           bg="bg-red-50"
           value={stats.newComplaints}
-          label="New Complaints"
+          label="Pending Complaints"
           color="text-red-600"
         />
         <StatCard
-          icon={<FiCheckCircle  className="w-5 h-5 text-emerald-500" />}
-          bg="bg-emerald-50"
-          value={`${stats.onTimeRate}%`}
-          label="On-Time Rate"
-          color="text-emerald-600"
+          icon={<FiStar         className="w-5 h-5 text-amber-500"   />}
+          bg="bg-amber-50"
+          value={stats.avgRating > 0 ? `${stats.avgRating} ★` : "—"}
+          label="Avg Feedback Rating"
+          color="text-amber-600"
         />
       </div>
 
@@ -370,12 +388,12 @@ export default function AdminDashboard() {
       >
         <div className="overflow-x-auto">
           <div className="min-w-max md:min-w-full">
-            <div className="grid grid-cols-[120px_1.4fr_1.3fr_110px_80px] bg-[#f5f8fc] px-4 py-2.5 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+            {/* No ETA column */}
+            <div className="grid grid-cols-[130px_1fr_1fr_130px] bg-[#f5f8fc] px-4 py-2.5 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-100">
               <div>Bus</div>
               <div>Route</div>
               <div>Driver</div>
               <div>Status</div>
-              <div>ETA</div>
             </div>
 
             {loading ? (
@@ -386,7 +404,7 @@ export default function AdminDashboard() {
               fleet.map((bus) => (
                 <div
                   key={bus.id}
-                  className="grid grid-cols-[120px_1.4fr_1.3fr_110px_80px] items-center px-4 py-3 text-sm border-b border-gray-50 hover:bg-gray-50 transition last:border-b-0"
+                  className="grid grid-cols-[130px_1fr_1fr_130px] items-center px-4 py-3 text-sm border-b border-gray-50 hover:bg-gray-50 transition last:border-b-0"
                 >
                   <div className="font-bold text-[#122843]">{bus.registrationNumber}</div>
                   <div>
@@ -400,7 +418,6 @@ export default function AdminDashboard() {
                       {bus.status}
                     </span>
                   </div>
-                  <div className="text-gray-500 font-medium">{bus.eta ?? "—"}</div>
                 </div>
               ))
             )}
@@ -487,6 +504,7 @@ export default function AdminDashboard() {
         <p className="text-sm font-bold text-[#122843] mb-4">System Summary</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
 
+          {/* Fleet Health — % of buses that are Active */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center flex-shrink-0">
               <FiTruck className="w-5 h-5 text-orange-500" />
@@ -494,31 +512,35 @@ export default function AdminDashboard() {
             <div>
               <p className="text-xl font-extrabold text-orange-600 leading-none">{stats.fleetHealth}%</p>
               <p className="text-[10px] text-gray-400 font-semibold mt-1">Fleet Health</p>
+              <p className="text-[9px] text-gray-300 mt-0.5">Active buses</p>
             </div>
           </div>
 
+          {/* Resolved Complaints */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-              <FiMap className="w-5 h-5 text-emerald-500" />
+              <FiCheckCircle className="w-5 h-5 text-emerald-500" />
             </div>
             <div>
-              <p className="text-xl font-extrabold text-emerald-600 leading-none">{stats.routeCoverage}%</p>
-              <p className="text-[10px] text-gray-400 font-semibold mt-1">Route Coverage</p>
+              <p className="text-xl font-extrabold text-emerald-600 leading-none">{stats.resolvedComplaints}</p>
+              <p className="text-[10px] text-gray-400 font-semibold mt-1">Resolved Complaints</p>
+              <p className="text-[9px] text-gray-300 mt-0.5">All time</p>
             </div>
           </div>
 
+          {/* Active Stops */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-              <IoEye className="w-5 h-5 text-blue-500" />
+              <FiMap className="w-5 h-5 text-blue-500" />
             </div>
             <div>
-              <p className="text-xl font-extrabold text-blue-600 leading-none">
-                {stats.activeStops > 0 ? `${stats.activeStops} Active` : "0"}
-              </p>
-              <p className="text-[10px] text-gray-400 font-semibold mt-1">Stop Network</p>
+              <p className="text-xl font-extrabold text-blue-600 leading-none">{stats.activeStops}</p>
+              <p className="text-[10px] text-gray-400 font-semibold mt-1">Active Stops</p>
+              <p className="text-[9px] text-gray-300 mt-0.5">In service</p>
             </div>
           </div>
 
+          {/* Total Users */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
               <FiUsers className="w-5 h-5 text-violet-500" />
@@ -526,6 +548,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-xl font-extrabold text-violet-600 leading-none">{stats.totalUsers}</p>
               <p className="text-[10px] text-gray-400 font-semibold mt-1">Total Users</p>
+              <p className="text-[9px] text-gray-300 mt-0.5">All roles</p>
             </div>
           </div>
 
