@@ -315,7 +315,7 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
       <div
         className={`fixed inset-y-0 left-0 z-1201 flex h-dvh w-70 -translate-x-full flex-col overflow-y-auto bg-[#122843] text-white shadow-2xl transition-transform duration-300 ease-in-out md:sticky md:top-0 md:z-20 md:h-dvh md:self-start md:shrink-0 md:w-96.25 md:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : ""} ${role === "passenger" ? "passenger-sidebar" : ""} ${role === "bus" ? "bus-sidebar" : ""} ${role === "admin" ? "admin-sidebar" : ""}`}
       >
-        <div className="pt-4 md:pt-0">
+        <div className="pt-4 pb-4 px-6 md:pt-6">
           <LogoNname />
         </div>
 
