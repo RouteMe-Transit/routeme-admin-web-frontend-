@@ -50,16 +50,10 @@ const CATEGORIES = [
   "Schedule",
 ];
 
-// ── FIX: Use the same env var as AdminPublishNews, strip /api/v1 suffix ───────
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1")
   .replace(/\/api\/v1$/, "");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Converts a stored image path like "/uploads/news/news-xxx.jpg"
- * into a full URL: "http://localhost:4000/uploads/news/news-xxx.jpg"
- */
 const buildImageUrl = (image?: string | null): string | null => {
   if (!image) return null;
   if (image.startsWith("http://") || image.startsWith("https://")) return image;
@@ -134,7 +128,6 @@ function SkeletonCard() {
 
 // ── News Card ─────────────────────────────────────────────────────────────────
 function NewsCard({ item, onClick }: { item: NewsItem; onClick: () => void }) {
-  const catStyle    = getCategoryStyle(item.category);
   const displayDate = formatDate(item.publishedDate ?? item.createdAt);
   const imageUrl    = buildImageUrl(item.image);
 
@@ -197,23 +190,6 @@ function NewsCard({ item, onClick }: { item: NewsItem; onClick: () => void }) {
             📰
           </div>
         )}
-        {/* Badge */}
-        <div style={{ position: "absolute", top: "10px", left: "10px" }}>
-          <span
-            style={{
-              background: catStyle.bg,
-              color: catStyle.text,
-              fontSize: "9px",
-              fontWeight: 800,
-              padding: "3px 8px",
-              borderRadius: "6px",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            {item.category}
-          </span>
-        </div>
       </div>
 
       {/* Content */}
@@ -281,7 +257,6 @@ function ArticleModal({
   item: NewsItem;
   onClose: () => void;
 }) {
-  const catStyle    = getCategoryStyle(item.category);
   const displayDate = formatDate(item.publishedDate ?? item.createdAt);
   const imageUrl    = buildImageUrl(item.image);
 
@@ -358,47 +333,6 @@ function ArticleModal({
               borderRadius: "24px 24px 0 0",
             }}
           />
-          {/* Close */}
-          <button
-            onClick={onClose}
-            style={{
-              position: "absolute",
-              top: "14px",
-              right: "14px",
-              width: "32px",
-              height: "32px",
-              background: "rgba(0,0,0,0.5)",
-              border: "none",
-              borderRadius: "50%",
-              color: "#fff",
-              fontSize: "14px",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "background 0.2s",
-            }}
-          >
-            ✕
-          </button>
-          {/* Badge */}
-          <div style={{ position: "absolute", top: "14px", left: "14px" }}>
-            <span
-              style={{
-                background: catStyle.bg,
-                color: catStyle.text,
-                fontSize: "10px",
-                fontWeight: 800,
-                padding: "4px 10px",
-                borderRadius: "8px",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              {item.category}
-            </span>
-          </div>
         </div>
 
         {/* Content */}
@@ -512,7 +446,6 @@ export default function PassengerNewsFeed() {
     try {
       setLoading(true);
 
-      // FIX: Use module-level API_BASE (same env var as AdminPublishNews)
       const params: Record<string, string | number | boolean> = {
         page,
         limit: LIMIT,
@@ -522,7 +455,6 @@ export default function PassengerNewsFeed() {
 
       const response = await axios.get(`${API_BASE}/api/v1/news`, { params });
 
-      // Normalize response shape
       const rawData = response.data?.data ?? response.data;
       const parsed  = newsListResponseSchema.safeParse(rawData);
 
@@ -531,7 +463,6 @@ export default function PassengerNewsFeed() {
         setTotalPages(parsed.data.totalPages ?? 1);
         setTotal(parsed.data.total ?? parsed.data.news.length);
       } else {
-        // Fallback: try array shape
         const arr = Array.isArray(rawData)
           ? rawData
           : rawData?.news ?? [];
@@ -555,7 +486,6 @@ export default function PassengerNewsFeed() {
     fetchNews();
   }, [fetchNews]);
 
-  // Client-side search filter
   const filtered = news.filter((item) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();

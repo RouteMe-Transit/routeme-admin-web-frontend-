@@ -88,6 +88,24 @@ function minutesToReadable(total: number): string {
 
 const fmtRouteId = (id: number) => `RT${String(id).padStart(4, "0")}`;
 
+// ─── ID search parser ─────────────────────────────────────────────────────────
+// Handles: "RT0001", "RT1", plain digits "0001" / "1" → ?id=
+// Everything else → ?search=
+function parseIdSearch(raw: string): { idQuery: string; textQuery: string } {
+  const trimmed = raw.trim().toUpperCase();
+
+  const prefixMatch = trimmed.match(/^RT(\d+)$/);
+  if (prefixMatch) {
+    return { idQuery: String(parseInt(prefixMatch[1], 10)), textQuery: "" };
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return { idQuery: String(parseInt(trimmed, 10)), textQuery: "" };
+  }
+
+  return { idQuery: "", textQuery: raw.trim() };
+}
+
 const emptyForm = (): FormData => ({
   routeName: "", from: "", to: "",
   noOfBuses: 5, avgTime: "",
@@ -277,12 +295,6 @@ function StopPickerModal({
 
         {/* Header */}
         <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
-          <button
-            className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white transition"
-            onClick={onClose}
-          >
-            <FaXmark />
-          </button>
           <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
             <span>📍</span> Configure Route Stops
           </h2>
@@ -478,6 +490,15 @@ export default function AdminManageRoutes() {
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
 
+  // ── Pagination ─────────────────────────────────────────────────────────────
+  const [page,        setPage]        = useState(1);
+  const [limit,       setLimit]       = useState(10);
+  const [totalRoutes, setTotalRoutes] = useState(0);
+  const [totalPages,  setTotalPages]  = useState(1);
+
+  // ── Stats (derived from a dedicated endpoint) ──────────────────────────────
+  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
+
   const [showModal,      setShowModal]      = useState(false);
   const [editingRoute,   setEditingRoute]   = useState<Route | null>(null);
   const [form,           setForm]           = useState<FormData>(emptyForm());
@@ -492,39 +513,70 @@ export default function AdminManageRoutes() {
     confirmLabel: string; confirmClass: string; onConfirm: () => void;
   }>({ open: false, title: "", message: "", confirmLabel: "", confirmClass: "", onConfirm: () => {} });
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-  const loadRoutes = useCallback(async () => {
+  // ── Load stats ─────────────────────────────────────────────────────────────
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ total: number; routes: Route[] }>("/routes?limit=9999");
+      const all = res.routes ?? [];
+      setStats({
+        total:    res.total ?? all.length,
+        active:   all.filter((r) => r.isActive).length,
+        inactive: all.filter((r) => !r.isActive).length,
+      });
+    } catch { /* non-critical */ }
+  }, []);
+
+  // ── Load routes — server-side search + status filter + pagination ──────────
+  const loadRoutes = useCallback(async (opts?: { search?: string; signal?: AbortSignal }) => {
     try {
       setLoading(true);
-      const res = await apiFetch<{ total: number; routes: Route[] }>("/routes");
+      const params = new URLSearchParams();
+
+      // ── Smart ID / text search ─────────────────────────────────────────────
+      // "RT0001", "RT1", "1", "0001" → ?id=   |   anything else → ?search=
+      if (opts?.search) {
+        const { idQuery, textQuery } = parseIdSearch(opts.search);
+        if (idQuery)   params.set("id",     idQuery);
+        if (textQuery) params.set("search", textQuery);
+      }
+
+      if (statusFilter) params.set("status", statusFilter);
+      params.set("page",  String(page));
+      params.set("limit", String(limit));
+
+      const res = await apiFetch<{ total: number; totalPages: number; routes: Route[] }>(
+        `/routes?${params.toString()}`,
+        { signal: opts?.signal }
+      );
+
       setRoutes(res.routes ?? []);
+      setTotalRoutes(res.total ?? 0);
+      setTotalPages(res.totalPages ?? 1);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load routes");
+      const isAbort = (err as any)?.name === "AbortError";
+      if (!isAbort)
+        toast.error(err instanceof Error ? err.message : "Failed to load routes");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, page, limit]);
 
-  useEffect(() => { loadRoutes(); }, [loadRoutes]);
+  // ── Debounced search ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      loadRoutes({ search: search.trim() || undefined, signal: controller.signal });
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [search, loadRoutes]);
 
-  // ── Derived stats ─────────────────────────────────────────────────────────
-  const totalRoutes    = routes.length;
-  const activeRoutes   = routes.filter((r) => r.isActive).length;
-  const inactiveRoutes = routes.filter((r) => !r.isActive).length;
+  // Reset to page 1 on search / filter change
+  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { setPage(1); }, [statusFilter]);
 
-  // ── Filter ────────────────────────────────────────────────────────────────
-  const filtered = routes.filter((r) => {
-    const q = search.toLowerCase();
-    const matchSearch =
-      fmtRouteId(r.id).toLowerCase().includes(q) ||
-      r.routeName.toLowerCase().includes(q) ||
-      r.from.toLowerCase().includes(q) ||
-      r.to.toLowerCase().includes(q);
-    const matchStatus =
-      statusFilter === "" ||
-      (statusFilter === "active" ? r.isActive : !r.isActive);
-    return matchSearch && matchStatus;
-  });
+  useEffect(() => { loadStats(); }, [loadStats]);
+
+  const safePage = Math.min(page, Math.max(1, totalPages));
 
   // ── Stop picker result ────────────────────────────────────────────────────
   const handleStopsConfirmed = ({ stopList, from, to }: StopPickerResult) => {
@@ -559,7 +611,8 @@ export default function AdminManageRoutes() {
         await apiFetch("/routes", { method: "POST", body: JSON.stringify(payload) });
         toast.success("Route created successfully");
       }
-      await loadRoutes();
+      await loadRoutes({ search: search.trim() || undefined });
+      await loadStats();
       setShowModal(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
@@ -583,7 +636,8 @@ export default function AdminManageRoutes() {
         setConfirmState((s) => ({ ...s, open: false }));
         try {
           await apiFetch(`/routes/${route.id}/suspend`, { method: "PATCH" });
-          await loadRoutes();
+          await loadRoutes({ search: search.trim() || undefined });
+          await loadStats();
           toast.success(isSuspending ? "Route suspended" : "Route reactivated");
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Failed");
@@ -618,9 +672,9 @@ export default function AdminManageRoutes() {
 
         {/* ── STATS ── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard icon={<FiMap         className="w-5 h-5 text-blue-500"    />} bg="bg-blue-50"    value={totalRoutes}    label="Total Routes"    color="text-blue-600"    />
-          <StatCard icon={<FiCheckCircle className="w-5 h-5 text-emerald-500" />} bg="bg-emerald-50" value={activeRoutes}   label="Active Routes"   color="text-emerald-600" />
-          <StatCard icon={<FiAlertOctagon className="w-5 h-5 text-red-400"   />} bg="bg-red-50"     value={inactiveRoutes} label="Inactive Routes"  color="text-red-500"     />
+          <StatCard icon={<FiMap          className="w-5 h-5 text-blue-500"    />} bg="bg-blue-50"    value={stats.total}    label="Total Routes"    color="text-blue-600"    />
+          <StatCard icon={<FiCheckCircle  className="w-5 h-5 text-emerald-500" />} bg="bg-emerald-50" value={stats.active}   label="Active Routes"   color="text-emerald-600" />
+          <StatCard icon={<FiAlertOctagon className="w-5 h-5 text-red-400"    />} bg="bg-red-50"     value={stats.inactive} label="Inactive Routes"  color="text-red-500"     />
         </div>
 
         {/* ── TOOLBAR ── */}
@@ -630,11 +684,16 @@ export default function AdminManageRoutes() {
               <FaMagnifyingGlass className="w-4 h-4 opacity-50" aria-hidden="true" />
               <input
                 type="text"
-                placeholder="Search by ID, name or destination…"
+                placeholder="Search name, destination or RT0001…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="flex-1 text-sm bg-transparent outline-none text-black"
               />
+              {search && (
+                <button onClick={() => setSearch("")} className="text-gray-400 hover:text-gray-600" aria-label="Clear search">
+                  <FaXmark className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             <select
@@ -677,10 +736,16 @@ export default function AdminManageRoutes() {
               {/* Body */}
               {loading ? (
                 <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading routes...</div>
-              ) : filtered.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500 text-sm">No routes found</div>
+              ) : routes.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                  {search
+                    ? `No routes found for "${search}"`
+                    : statusFilter
+                    ? `No ${statusFilter} routes found`
+                    : "No routes found"}
+                </div>
               ) : (
-                filtered.map((route) => {
+                routes.map((route) => {
                   const displayStatus = route.isActive ? "Active" : "Inactive";
                   return (
                     <div key={route.id}
@@ -736,6 +801,58 @@ export default function AdminManageRoutes() {
             </div>
           </div>
         </div>
+
+        {/* ── PAGINATION ── */}
+        {!loading && totalRoutes > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-gray-600">
+              Showing {(safePage - 1) * limit + 1} to {Math.min(safePage * limit, totalRoutes)} of {totalRoutes} routes
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((v) => Math.max(1, v - 1))}
+                disabled={safePage <= 1}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setPage(pageNumber)}
+                    className={`min-w-9 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      pageNumber === safePage
+                        ? "bg-[#4CAF8A] text-white"
+                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPage((v) => Math.min(totalPages, v + 1))}
+                disabled={safePage >= totalPages}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <select
+                value={limit}
+                onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                className="h-9 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -744,11 +861,6 @@ export default function AdminManageRoutes() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 w-full max-w-md max-h-[92vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
-
-            <button type="button" aria-label="Close modal" onClick={() => setShowModal(false)}
-              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white">
-              <FaXmark />
-            </button>
 
             <h3 className="mb-1 text-lg font-bold text-gray-800">
               {editingRoute ? "Edit Route" : "Add New Route"}
@@ -866,11 +978,6 @@ export default function AdminManageRoutes() {
       {viewRoute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 w-full max-w-md max-h-[85vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
-
-            <button type="button" aria-label="Close view modal" onClick={() => setViewRoute(null)}
-              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white">
-              <FaXmark />
-            </button>
 
             <h3 className="mb-5 text-lg font-bold text-gray-800">Route Details</h3>
 

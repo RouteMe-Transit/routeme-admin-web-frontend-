@@ -29,6 +29,7 @@ type Route = {
 
 type Bus = {
   id:                 number;
+  userId:             number | null;
   registrationNumber: string;
   busType:            BusType;
   routeId:            number | null;
@@ -36,6 +37,7 @@ type Bus = {
   totalSeats:         number;
   recordedAt:         string | null;
   isActive:           boolean;
+  status:             BusStatus;
   ownerName:          string;
   ownerNic:           string;
   ownerEmail:         string;
@@ -57,6 +59,13 @@ type BusFormValues = {
 };
 
 type FieldErrors = Record<string, string>;
+
+type StatsData = {
+  totalFleet:    number;
+  inMaintenance: number;
+  breakdowns:    number;
+  operational:   number;
+};
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 const plateRegex = /^[A-Z]{2}\s([A-Z]{2,3}-\d{4}|\d{2}-\d{4})$/i;
@@ -86,26 +95,20 @@ const busFormSchema = z.object({
   lastService: z.string().min(1, "Last service date is required"),
   status:      z.enum(["Active", "Maintenance", "Breakdown"]),
   owner:       personSchema,
-  drivers: z
-    .array(personSchema)
-    .min(1, "At least one driver is required")
-    .max(3, "Maximum 3 drivers"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  drivers:     z.array(personSchema).min(1, "At least one driver is required").max(3, "Maximum 3 drivers"),
+  password:    z.string().min(8, "Password must be at least 8 characters"),
 });
 
 const busEditSchema = busFormSchema.extend({
   routeId:  routeIdSchema,
-  password: z
-    .string()
-    .refine((v) => v === "" || v.length >= 8, "Password must be at least 8 characters"),
+  password: z.string().refine((v) => v === "" || v.length >= 8, "Password must be at least 8 characters"),
 });
 
 // ─── API helper ───────────────────────────────────────────────────────────────
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -120,13 +123,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function generatePassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$!";
-  return Array.from({ length: 12 }, () =>
-    chars[Math.floor(Math.random() * chars.length)]
-  ).join("");
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-const fmtBusId = (id: number) => `BUS${String(id).padStart(4, "0")}`;
-
+// Uses userId (users table id) if available, falls back to bus_details id
+const fmtBusId    = (bus: Bus) => `BUS${String(bus.userId ?? bus.id).padStart(4, "0")}`;
 const emptyOwner  = (): Owner  => ({ name: "", nic: "", email: "", phone: "" });
 const emptyDriver = (): Driver => ({ name: "", nic: "", email: "", phone: "" });
 
@@ -144,22 +145,37 @@ const emptyForm = (): BusFormValues => ({
 
 const STATUS_BADGE: Record<BusStatus, string> = {
   Active:      "bg-emerald-600 text-white",
-  Maintenance: "bg-amber-400  text-white",
-  Breakdown:   "bg-red-500    text-white",
+  Maintenance: "bg-amber-400 text-white",
+  Breakdown:   "bg-red-500 text-white",
 };
 
 const BUS_TYPE_OPTIONS: BusType[]   = ["A/C Express", "Semi-Luxury", "Regular"];
 const STATUS_OPTIONS:   BusStatus[] = ["Active", "Maintenance", "Breakdown"];
 
+// ─── ID search parser ─────────────────────────────────────────────────────────
+// Handles: "BUS0001", "BUS1", plain digits "0001" / "1" → ?userId=
+// Everything else → ?search= (plate, owner name, etc.)
+function parseIdSearch(raw: string): { userIdQuery: string; textQuery: string } {
+  const trimmed = raw.trim().toUpperCase();
+
+  // Matches: BUS0001, BUS1
+  const prefixMatch = trimmed.match(/^BUS(\d+)$/);
+  if (prefixMatch) {
+    return { userIdQuery: String(parseInt(prefixMatch[1], 10)), textQuery: "" };
+  }
+
+  // Plain digits: "0001", "1", "42"
+  if (/^\d+$/.test(trimmed)) {
+    return { userIdQuery: String(parseInt(trimmed, 10)), textQuery: "" };
+  }
+
+  // Anything else is a text search (plate number, owner name, etc.)
+  return { userIdQuery: "", textQuery: raw.trim() };
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
-function StatCard({
-  icon, bg, value, label, color,
-}: {
-  icon: React.ReactNode;
-  bg: string;
-  value: number;
-  label: string;
-  color: string;
+function StatCard({ icon, bg, value, label, color }: {
+  icon: React.ReactNode; bg: string; value: number; label: string; color: string;
 }) {
   return (
     <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
@@ -179,17 +195,10 @@ function FieldError({ msg }: { msg?: string }) {
   return <p className="mt-1 text-xs text-red-500 font-semibold">{msg}</p>;
 }
 
-// ─── Confirm modal ────────────────────────────────────────────────────────────
-function ConfirmModal({
-  open, title, message, confirmLabel, confirmClass, onCancel, onConfirm,
-}: {
-  open: boolean;
-  title: string;
-  message: string;
-  confirmLabel: string;
-  confirmClass: string;
-  onCancel: () => void;
-  onConfirm: () => void;
+function ConfirmModal({ open, title, message, confirmLabel, confirmClass, onCancel, onConfirm }: {
+  open: boolean; title: string; message: string;
+  confirmLabel: string; confirmClass: string;
+  onCancel: () => void; onConfirm: () => void;
 }) {
   if (!open) return null;
   return (
@@ -198,16 +207,10 @@ function ConfirmModal({
         <h3 className="mb-2 text-lg font-bold text-gray-800">{title}</h3>
         <p className="mb-5 text-sm text-gray-600">{message}</p>
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="rounded-md bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300"
-          >
+          <button onClick={onCancel} className="rounded-md bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300">
             Cancel
           </button>
-          <button
-            onClick={onConfirm}
-            className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${confirmClass}`}
-          >
+          <button onClick={onConfirm} className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${confirmClass}`}>
             {confirmLabel}
           </button>
         </div>
@@ -236,7 +239,16 @@ export default function AdminManageBuses() {
   const [search,        setSearch]        = useState("");
   const [statusFilter,  setStatusFilter]  = useState<BusStatus | "">("");
 
-  const [statusMap, setStatusMap] = useState<Record<number, BusStatus>>({});
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const [page,       setPage]       = useState(1);
+  const [limit,      setLimit]      = useState(10);
+  const [totalBuses, setTotalBuses] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  const [stats, setStats] = useState<StatsData>({
+    totalFleet: 0, inMaintenance: 0, breakdowns: 0, operational: 0,
+  });
 
   const [showModal,  setShowModal]  = useState(false);
   const [editingBus, setEditingBus] = useState<Bus | null>(null);
@@ -253,44 +265,70 @@ export default function AdminManageBuses() {
   const [showViewPwd,  setShowViewPwd]  = useState(false);
   const [pwdMap,       setPwdMap]       = useState<Record<number, string>>({});
 
-  // ── Confirm modal state ───────────────────────────────────────────────────
   const [confirmState, setConfirmState] = useState<{
-    open: boolean;
-    title: string;
-    message: string;
-    confirmLabel: string;
-    confirmClass: string;
-    onConfirm: () => void;
-  }>({
-    open: false,
-    title: "",
-    message: "",
-    confirmLabel: "",
-    confirmClass: "",
-    onConfirm: () => {},
-  });
+    open: boolean; title: string; message: string;
+    confirmLabel: string; confirmClass: string; onConfirm: () => void;
+  }>({ open: false, title: "", message: "", confirmLabel: "", confirmClass: "", onConfirm: () => {} });
 
-  // ── Load buses ────────────────────────────────────────────────────────────
-  const loadBuses = useCallback(async () => {
+  // ── Read status directly from the API response ────────────────────────────
+  const getBusStatus = useCallback(
+    (bus: Bus): BusStatus =>
+      bus.status ?? (bus.isActive ? "Active" : "Maintenance"),
+    []
+  );
+
+  // ── Load stats via dedicated endpoint ─────────────────────────────────────
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await apiFetch<{
+        total: number;
+        active: number;
+        maintenance: number;
+        breakdown: number;
+      }>("/buses/stats");
+      setStats({
+        totalFleet:    res.total,
+        operational:   res.active,
+        inMaintenance: res.maintenance,
+        breakdowns:    res.breakdown,
+      });
+    } catch { /* non-critical */ }
+  }, []);
+
+  // ── Load buses — server-side search + status filter + pagination ───────────
+  const loadBuses = useCallback(async (opts?: { search?: string; signal?: AbortSignal }) => {
     try {
       setLoading(true);
-      const res = await apiFetch<{ total: number; buses: Bus[] }>("/buses?limit=200");
-      const rows = res.buses ?? [];
-      setBuses(rows);
-      setStatusMap((prev) => {
-        const next = { ...prev };
-        rows.forEach((b) => {
-          if (next[b.id] === undefined)
-            next[b.id] = b.isActive ? "Active" : "Maintenance";
-        });
-        return next;
-      });
+      const params = new URLSearchParams();
+
+      // ── Smart ID / text search ─────────────────────────────────────────────
+      // "BUS0001", "BUS1", "1", "0001" → ?userId=   |   anything else → ?search=
+      if (opts?.search) {
+        const { userIdQuery, textQuery } = parseIdSearch(opts.search);
+        if (userIdQuery) params.set("userId", userIdQuery);
+        if (textQuery)   params.set("search", textQuery);
+      }
+
+      if (statusFilter) params.set("status", statusFilter);
+      params.set("page",  String(page));
+      params.set("limit", String(limit));
+
+      const res = await apiFetch<{ total: number; totalPages: number; buses: Bus[] }>(
+        `/buses?${params.toString()}`,
+        { signal: opts?.signal }
+      );
+
+      setBuses(res.buses ?? []);
+      setTotalBuses(res.total ?? 0);
+      setTotalPages(res.totalPages ?? 1);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load buses");
+      const isAbort = (err as any)?.name === "AbortError";
+      if (!isAbort)
+        toast.error(err instanceof Error ? err.message : "Failed to load buses");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, page, limit]);
 
   // ── Load routes ───────────────────────────────────────────────────────────
   const loadRoutes = useCallback(async () => {
@@ -298,22 +336,32 @@ export default function AdminManageBuses() {
       setRoutesLoading(true);
       const res = await apiFetch<{ routes: Route[] }>("/routes?limit=200");
       setRoutes(res.routes ?? []);
-    } catch {
-      // non-critical
-    } finally {
-      setRoutesLoading(false);
-    }
+    } catch { /* non-critical */ }
+    finally { setRoutesLoading(false); }
   }, []);
 
+  // ── Debounced search ──────────────────────────────────────────────────────
   useEffect(() => {
-    loadBuses();
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      loadBuses({ search: search.trim() || undefined, signal: controller.signal });
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [search, loadBuses]);
+
+  // Reset to page 1 on search change
+  useEffect(() => { setPage(1); }, [search]);
+
+  // Reset to page 1 on status filter change
+  useEffect(() => { setPage(1); }, [statusFilter]);
+
+  // Initial load
+  useEffect(() => {
+    loadStats();
     loadRoutes();
-  }, [loadBuses, loadRoutes]);
+  }, [loadStats, loadRoutes]);
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-  const getBusStatus = (bus: Bus): BusStatus =>
-    statusMap[bus.id] ?? (bus.isActive ? "Active" : "Maintenance");
-
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const getRouteName = (bus: Bus): string => {
     if (bus.route?.routeName) return bus.route.routeName;
     if (bus.routeId) {
@@ -323,31 +371,12 @@ export default function AdminManageBuses() {
     return "—";
   };
 
-  const totalFleet    = buses.length;
-  const inMaintenance = buses.filter((b) => getBusStatus(b) === "Maintenance").length;
-  const breakdowns    = buses.filter((b) => getBusStatus(b) === "Breakdown").length;
-  const operational   = buses.filter((b) => getBusStatus(b) === "Active").length;
+  const safePage = Math.min(page, Math.max(1, totalPages));
 
-  const filtered = buses.filter((b) => {
-    const q = search.toLowerCase();
-    const matchSearch =
-      fmtBusId(b.id).toLowerCase().includes(q) ||
-      b.registrationNumber.toLowerCase().includes(q) ||
-      b.ownerName.toLowerCase().includes(q) ||
-      getRouteName(b).toLowerCase().includes(q) ||
-      b.drivers?.some((d) => d.name?.toLowerCase().includes(q));
-    const st = getBusStatus(b);
-    const matchStatus = statusFilter === "" || st === statusFilter;
-    return matchSearch && matchStatus;
-  });
-
-  // ── Zod error flattener ───────────────────────────────────────────────────
+  // ── Zod flattener ─────────────────────────────────────────────────────────
   const flattenZodErrors = (issues: ZodIssue[]): FieldErrors => {
     const errs: FieldErrors = {};
-    issues.forEach((e) => {
-      const key = e.path.join(".");
-      if (!errs[key]) errs[key] = e.message;
-    });
+    issues.forEach((e) => { const key = e.path.join("."); if (!errs[key]) errs[key] = e.message; });
     return errs;
   };
 
@@ -371,11 +400,11 @@ export default function AdminManageBuses() {
     setEditingBus(bus);
     setForm({
       registrationNumber: bus.registrationNumber,
-      routeId:            bus.routeId ?? null,
-      busType:            bus.busType,
-      totalSeats:         bus.totalSeats,
-      lastService:        bus.recordedAt ? bus.recordedAt.slice(0, 10) : "",
-      status:             getBusStatus(bus),
+      routeId:     bus.routeId ?? null,
+      busType:     bus.busType,
+      totalSeats:  bus.totalSeats,
+      lastService: bus.recordedAt ? bus.recordedAt.slice(0, 10) : "",
+      status:      bus.status ?? (bus.isActive ? "Active" : "Maintenance"),
       owner: {
         name:  bus.ownerName,
         nic:   bus.ownerNic,
@@ -393,7 +422,6 @@ export default function AdminManageBuses() {
     setShowModal(true);
   };
 
-  // ── Owner / Driver field updaters ─────────────────────────────────────────
   const updateOwner = (field: keyof Owner, value: string) =>
     setForm((f) => ({ ...f, owner: { ...f.owner, [field]: value } }));
 
@@ -404,30 +432,21 @@ export default function AdminManageBuses() {
       return { ...f, drivers };
     });
 
-  const addDriver = () => {
-    if (form.drivers.length < 3)
-      setForm((f) => ({ ...f, drivers: [...f.drivers, emptyDriver()] }));
-  };
-
-  const removeDriver = (i: number) =>
-    setForm((f) => ({ ...f, drivers: f.drivers.filter((_, idx) => idx !== i) }));
+  const addDriver    = () => { if (form.drivers.length < 3) setForm((f) => ({ ...f, drivers: [...f.drivers, emptyDriver()] })); };
+  const removeDriver = (i: number) => setForm((f) => ({ ...f, drivers: f.drivers.filter((_, idx) => idx !== i) }));
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    const finalPassword =
-      passwordMode === "auto"
-        ? editingBus
-          ? ""
-          : autoPassword
-        : form.password;
+    const finalPassword = passwordMode === "auto"
+      ? (editingBus ? "" : autoPassword)
+      : form.password;
 
     const payload = { ...form, password: finalPassword };
     const schema  = editingBus ? busEditSchema : busFormSchema;
     const result  = schema.safeParse(payload);
 
     if (!result.success) {
-      const errs = flattenZodErrors(result.error.issues);
-      setFieldErrors(errs);
+      setFieldErrors(flattenZodErrors(result.error.issues));
       toast.error(result.error.issues[0]?.message ?? "Please fix the errors");
       return;
     }
@@ -442,6 +461,7 @@ export default function AdminManageBuses() {
       totalSeats:         form.totalSeats,
       routeId:            form.routeId,
       recordedAt:         form.lastService || null,
+      status:             form.status,
       owner:              form.owner,
       drivers:            form.drivers,
     };
@@ -449,24 +469,17 @@ export default function AdminManageBuses() {
 
     try {
       if (editingBus) {
-        await apiFetch(`/buses/${editingBus.id}`, {
-          method: "PUT",
-          body: JSON.stringify(body),
-        });
-        setStatusMap((m) => ({ ...m, [editingBus.id]: form.status }));
+        await apiFetch(`/buses/${editingBus.id}`, { method: "PUT", body: JSON.stringify(body) });
         if (finalPassword) setPwdMap((m) => ({ ...m, [editingBus.id]: finalPassword }));
         toast.success("Bus updated successfully");
       } else {
-        const res = await apiFetch<{ id: number }>("/buses", {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
+        const res = await apiFetch<{ id: number }>("/buses", { method: "POST", body: JSON.stringify(body) });
         const newId = res?.id ?? Date.now();
-        setStatusMap((m) => ({ ...m, [newId]: form.status }));
         if (finalPassword) setPwdMap((m) => ({ ...m, [newId]: finalPassword }));
         toast.success("Bus registered successfully");
       }
-      await loadBuses();
+      await loadBuses({ search: search.trim() || undefined });
+      await loadStats();
       setShowModal(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
@@ -479,22 +492,23 @@ export default function AdminManageBuses() {
 
   // ── Toggle active ─────────────────────────────────────────────────────────
   const handleToggle = (bus: Bus) => {
-    const isActive = bus.isActive;
+    const currentStatus = getBusStatus(bus);
+    const isActive      = currentStatus === "Active";
+
     setConfirmState({
       open: true,
-      title: `${isActive ? "Suspend" : "Reactivate"} ${fmtBusId(bus.id)}?`,
-      message: isActive
-        ? "This bus will be deactivated."
-        : "This bus will be restored to service.",
+      title:        `${isActive ? "Suspend" : "Reactivate"} ${fmtBusId(bus)}?`,
+      message:      isActive
+        ? "This bus will be set to Maintenance."
+        : "This bus will be restored to Active service.",
       confirmLabel: isActive ? "Yes, suspend" : "Yes, reactivate",
-      confirmClass: isActive
-        ? "bg-red-500 hover:bg-red-600"
-        : "bg-emerald-500 hover:bg-emerald-600",
+      confirmClass: isActive ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600",
       onConfirm: async () => {
         setConfirmState((s) => ({ ...s, open: false }));
         try {
           await apiFetch(`/buses/${bus.id}/toggle`, { method: "PATCH" });
-          await loadBuses();
+          await loadBuses({ search: search.trim() || undefined });
+          await loadStats();
           toast.success(isActive ? "Bus suspended" : "Bus reactivated");
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Failed");
@@ -512,16 +526,16 @@ export default function AdminManageBuses() {
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
           <StatCard
             icon={<FiTruck         className="w-5 h-5 text-blue-500"    />}
-            bg="bg-blue-50"    value={totalFleet}    label="Total Fleet"    color="text-blue-600"    />
+            bg="bg-blue-50"    value={stats.totalFleet}    label="Total Fleet"    color="text-blue-600"    />
           <StatCard
             icon={<FiTool          className="w-5 h-5 text-amber-500"   />}
-            bg="bg-amber-50"   value={inMaintenance} label="In Maintenance" color="text-amber-600"   />
+            bg="bg-amber-50"   value={stats.inMaintenance} label="In Maintenance" color="text-amber-600"   />
           <StatCard
             icon={<FiAlertTriangle className="w-5 h-5 text-red-400"    />}
-            bg="bg-red-50"     value={breakdowns}    label="Breakdowns"     color="text-red-500"     />
+            bg="bg-red-50"     value={stats.breakdowns}    label="Breakdowns"     color="text-red-500"     />
           <StatCard
             icon={<FiCheckCircle   className="w-5 h-5 text-emerald-500" />}
-            bg="bg-emerald-50" value={operational}   label="Operational"    color="text-emerald-600" />
+            bg="bg-emerald-50" value={stats.operational}   label="Operational"    color="text-emerald-600" />
         </div>
 
         {/* ── TOOLBAR ── */}
@@ -533,11 +547,16 @@ export default function AdminManageBuses() {
               <FaMagnifyingGlass className="w-4 h-4 opacity-50" aria-hidden="true" />
               <input
                 type="text"
-                placeholder="Search bus, plate or driver…"
+                placeholder="Search plate, owner or BUS0001…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="flex-1 text-sm bg-transparent outline-none text-black"
               />
+              {search && (
+                <button onClick={() => setSearch("")} className="text-gray-400 hover:text-gray-600" aria-label="Clear search">
+                  <FaXmark className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Status filter */}
@@ -547,9 +566,7 @@ export default function AdminManageBuses() {
               className="h-10 border border-[#828282]/40 rounded-lg px-3 bg-white text-sm text-black cursor-pointer shadow-sm"
             >
               <option value="">All Status</option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
 
             {/* Add Bus */}
@@ -568,7 +585,7 @@ export default function AdminManageBuses() {
           <div className="overflow-x-auto md:overflow-x-visible">
             <div className="min-w-max md:min-w-full">
 
-              {/* Header — removed Last Service column */}
+              {/* Header */}
               <div className="grid grid-cols-[100px_130px_110px_160px_70px_110px_116px] bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-700 border-b uppercase">
                 <div>Bus ID</div>
                 <div>Plate</div>
@@ -582,45 +599,33 @@ export default function AdminManageBuses() {
               {/* Body */}
               {loading ? (
                 <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading buses...</div>
-              ) : filtered.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500 text-sm">No buses found</div>
+              ) : buses.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                  {search
+                    ? `No buses found for "${search}"`
+                    : statusFilter
+                    ? `No ${statusFilter} buses found`
+                    : "No buses found"}
+                </div>
               ) : (
-                filtered.map((bus) => {
-                  const st = getBusStatus(bus);
+                buses.map((bus) => {
+                  const st       = getBusStatus(bus);
+                  const isActive = st === "Active";
                   return (
                     <div
                       key={bus.id}
                       className="grid grid-cols-[100px_130px_110px_160px_70px_110px_116px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition"
                     >
-                      {/* Bus ID */}
-                      <div className="font-semibold text-[#122843] whitespace-nowrap">
-                        {fmtBusId(bus.id)}
-                      </div>
-
-                      {/* Plate */}
-                      <div className="font-medium text-gray-800 truncate text-sm">
-                        {bus.registrationNumber}
-                      </div>
-
-                      {/* Type */}
+                      <div className="font-semibold text-[#122843] whitespace-nowrap">{fmtBusId(bus)}</div>
+                      <div className="font-medium text-gray-800 truncate text-sm">{bus.registrationNumber}</div>
                       <div className="text-gray-600 text-sm">{bus.busType}</div>
-
-                      {/* Route */}
-                      <div className="text-gray-600 text-sm truncate pr-2">
-                        {getRouteName(bus)}
-                      </div>
-
-                      {/* Seats */}
+                      <div className="text-gray-600 text-sm truncate pr-2">{getRouteName(bus)}</div>
                       <div className="text-gray-600 text-sm">{bus.totalSeats}</div>
-
-                      {/* Status badge */}
                       <div>
                         <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${STATUS_BADGE[st]}`}>
                           {st}
                         </span>
                       </div>
-
-                      {/* Actions */}
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => { setShowViewPwd(false); setViewBus(bus); }}
@@ -636,7 +641,7 @@ export default function AdminManageBuses() {
                         >
                           <IoPencil className="text-amber-500 w-3.5 h-3.5" />
                         </button>
-                        {bus.isActive ? (
+                        {isActive ? (
                           <button
                             onClick={() => handleToggle(bus)}
                             title="Suspend bus"
@@ -661,6 +666,58 @@ export default function AdminManageBuses() {
             </div>
           </div>
         </div>
+
+        {/* ── PAGINATION ── */}
+        {!loading && totalBuses > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-gray-600">
+              Showing {(safePage - 1) * limit + 1} to {Math.min(safePage * limit, totalBuses)} of {totalBuses} buses
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((v) => Math.max(1, v - 1))}
+                disabled={safePage <= 1}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setPage(pageNumber)}
+                    className={`min-w-9 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      pageNumber === safePage
+                        ? "bg-[#4CAF8A] text-white"
+                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPage((v) => Math.min(totalPages, v + 1))}
+                disabled={safePage >= totalPages}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <select
+                value={limit}
+                onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                className="h-9 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -670,28 +727,16 @@ export default function AdminManageBuses() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
 
-            <button
-              type="button"
-              aria-label="Close modal"
-              onClick={() => setShowModal(false)}
-              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white"
-            >
-              <FaXmark />
-            </button>
-
             <h3 className="mb-1 text-lg font-bold text-gray-800">
-              {editingBus ? `Update ${fmtBusId(editingBus.id)}` : "Add New Bus"}
+              {editingBus ? `Update ${fmtBusId(editingBus)}` : "Add New Bus"}
             </h3>
             <p className="mb-3 text-xs text-gray-500">
-              {editingBus
-                ? "Edit bus details and personnel"
-                : "Register a new bus to the fleet"}
+              {editingBus ? "Edit bus details and personnel" : "Register a new bus to the fleet"}
             </p>
             <p className="mb-4 text-xs text-gray-500">
               Fields marked with <span className="text-red-600">*</span> are mandatory.
             </p>
 
-            {/* API error */}
             {apiError && (
               <div className="mb-4 flex items-start gap-2 rounded-md border border-red-100 bg-red-50 p-3 text-xs font-semibold text-red-600">
                 <span className="mt-0.5">⚠</span>
@@ -708,9 +753,7 @@ export default function AdminManageBuses() {
                   className={ic("registrationNumber")}
                   placeholder="e.g. WP NC-1234"
                   value={form.registrationNumber}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, registrationNumber: e.target.value.toUpperCase() }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, registrationNumber: e.target.value.toUpperCase() }))}
                 />
                 <FieldError msg={fe("registrationNumber")} />
               </div>
@@ -721,22 +764,14 @@ export default function AdminManageBuses() {
                 <select
                   className={ic("routeId")}
                   value={form.routeId ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      routeId: e.target.value ? parseInt(e.target.value, 10) : null,
-                    }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, routeId: e.target.value ? parseInt(e.target.value, 10) : null }))}
                 >
                   <option value="">— Select a route —</option>
                   {routesLoading && <option disabled>Loading routes…</option>}
-                  {!routesLoading && routes.length === 0 && (
-                    <option disabled>No routes available</option>
-                  )}
+                  {!routesLoading && routes.length === 0 && <option disabled>No routes available</option>}
                   {routes.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.routeName}
-                      {r.from && r.to ? ` · ${r.from} → ${r.to}` : ""}
+                      {r.routeName}{r.from && r.to ? ` · ${r.from} → ${r.to}` : ""}
                     </option>
                   ))}
                 </select>
@@ -747,21 +782,15 @@ export default function AdminManageBuses() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Category <span className="text-red-600">*</span></label>
-                  <select
-                    className={inputNormal}
-                    value={form.busType}
-                    onChange={(e) => setForm((f) => ({ ...f, busType: e.target.value as BusType }))}
-                  >
+                  <select className={inputNormal} value={form.busType}
+                    onChange={(e) => setForm((f) => ({ ...f, busType: e.target.value as BusType }))}>
                     {BUS_TYPE_OPTIONS.map((o) => <option key={o}>{o}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={labelCls}>Status <span className="text-red-600">*</span></label>
-                  <select
-                    className={inputNormal}
-                    value={form.status}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as BusStatus }))}
-                  >
+                  <select className={inputNormal} value={form.status}
+                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as BusStatus }))}>
                     {STATUS_OPTIONS.map((o) => <option key={o}>{o}</option>)}
                   </select>
                 </div>
@@ -775,9 +804,7 @@ export default function AdminManageBuses() {
                     type="number"
                     className={ic("totalSeats")}
                     value={form.totalSeats}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, totalSeats: parseInt(e.target.value, 10) || 0 }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, totalSeats: parseInt(e.target.value, 10) || 0 }))}
                   />
                   <FieldError msg={fe("totalSeats")} />
                 </div>
@@ -793,7 +820,7 @@ export default function AdminManageBuses() {
                 </div>
               </div>
 
-              {/* ── Bus Owner ── */}
+              {/* Bus Owner */}
               <div>
                 <p className="mb-2 font-semibold text-sm text-gray-700">
                   Bus Owner Contact <span className="text-red-600">*</span>
@@ -816,10 +843,7 @@ export default function AdminManageBuses() {
                           maxLength={field === "phone" ? 10 : field === "nic" ? 12 : undefined}
                           value={form.owner[field]}
                           onChange={(e) =>
-                            updateOwner(
-                              field,
-                              field === "nic" ? e.target.value.toUpperCase() : e.target.value
-                            )
+                            updateOwner(field, field === "nic" ? e.target.value.toUpperCase() : e.target.value)
                           }
                         />
                         <FieldError msg={fe(`owner.${field}`)} />
@@ -829,7 +853,7 @@ export default function AdminManageBuses() {
                 </div>
               </div>
 
-              {/* ── Drivers ── */}
+              {/* Drivers */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="font-semibold text-sm text-gray-700">
@@ -837,31 +861,21 @@ export default function AdminManageBuses() {
                     <span className="text-gray-400 font-normal">({form.drivers.length}/3)</span>
                   </p>
                   {form.drivers.length < 3 && (
-                    <button
-                      type="button"
-                      onClick={addDriver}
-                      className="text-xs font-bold text-[#4CAF8A] hover:text-[#3d9e7a] transition"
-                    >
+                    <button type="button" onClick={addDriver}
+                      className="text-xs font-bold text-[#4CAF8A] hover:text-[#3d9e7a] transition">
                       + Add Driver
                     </button>
                   )}
                 </div>
-
                 {fe("drivers") && <FieldError msg={fe("drivers")} />}
-
                 <div className="space-y-3">
                   {form.drivers.map((driver, idx) => (
                     <div key={idx} className="rounded-md border border-gray-200 bg-gray-50/60 p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-bold text-gray-500 uppercase">
-                          Driver {idx + 1}
-                        </span>
+                        <span className="text-xs font-bold text-gray-500 uppercase">Driver {idx + 1}</span>
                         {form.drivers.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeDriver(idx)}
-                            className="text-xs text-red-400 hover:text-red-600 font-bold transition"
-                          >
+                          <button type="button" onClick={() => removeDriver(idx)}
+                            className="text-xs text-red-400 hover:text-red-600 font-bold transition">
                             Remove
                           </button>
                         )}
@@ -883,11 +897,7 @@ export default function AdminManageBuses() {
                               maxLength={field === "phone" ? 10 : field === "nic" ? 12 : undefined}
                               value={driver[field]}
                               onChange={(e) =>
-                                updateDriver(
-                                  idx,
-                                  field,
-                                  field === "nic" ? e.target.value.toUpperCase() : e.target.value
-                                )
+                                updateDriver(idx, field, field === "nic" ? e.target.value.toUpperCase() : e.target.value)
                               }
                             />
                             <FieldError msg={fe(`drivers.${idx}.${field}`)} />
@@ -899,12 +909,11 @@ export default function AdminManageBuses() {
                 </div>
               </div>
 
-              {/* ── Password ── */}
+              {/* Password */}
               <div>
                 <label className={labelCls}>
                   {editingBus ? "Password" : <>Bus Access Password <span className="text-red-600">*</span></>}
                 </label>
-
                 <div className="flex gap-2 mb-3">
                   {(["auto", "custom"] as const).map((mode) => (
                     <button
@@ -933,20 +942,14 @@ export default function AdminManageBuses() {
                       <span className="text-sm font-mono text-[#122843] font-bold tracking-wider">
                         {showPassword ? autoPassword : "•".repeat(autoPassword.length)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="text-gray-400 hover:text-gray-600 text-xs ml-2"
-                      >
+                      <button type="button" onClick={() => setShowPassword((v) => !v)}
+                        className="text-gray-400 hover:text-gray-600 text-xs ml-2">
                         {showPassword ? "🙈" : "👁️"}
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setAutoPassword(generatePassword())}
+                    <button type="button" onClick={() => setAutoPassword(generatePassword())}
                       className="h-10 px-3 rounded-lg bg-[#4CAF8A] text-white text-xs font-bold hover:bg-[#3d9e7a] transition"
-                      title="Regenerate password"
-                    >
+                      title="Regenerate password">
                       🔄
                     </button>
                   </div>
@@ -954,9 +957,7 @@ export default function AdminManageBuses() {
 
                 {passwordMode === "auto" && editingBus && (
                   <div className="h-10 border border-dashed border-gray-300 rounded-lg px-3 flex items-center bg-gray-50">
-                    <span className="text-xs text-gray-400 italic">
-                      Existing password will remain unchanged
-                    </span>
+                    <span className="text-xs text-gray-400 italic">Existing password will remain unchanged</span>
                   </div>
                 )}
 
@@ -965,21 +966,12 @@ export default function AdminManageBuses() {
                     <input
                       type={showPassword ? "text" : "password"}
                       className={fe("password") ? inputErr : inputNormal}
-                      placeholder={
-                        editingBus
-                          ? "Enter new password (min. 8 chars)"
-                          : "Min. 8 chars"
-                      }
+                      placeholder={editingBus ? "Enter new password (min. 8 chars)" : "Min. 8 chars"}
                       value={form.password}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, password: e.target.value }))
-                      }
+                      onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
+                    <button type="button" onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showPassword ? "🙈" : "👁️"}
                     </button>
                   </div>
@@ -1000,22 +992,13 @@ export default function AdminManageBuses() {
 
             {/* Actions */}
             <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="rounded-md bg-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-400 transition"
-              >
+              <button type="button" onClick={() => setShowModal(false)}
+                className="rounded-md bg-gray-300 px-5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-400 transition">
                 Cancel
               </button>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={handleSave}
-                className="rounded-xl bg-[#f5a623] hover:bg-[#e09510] px-8 py-2 text-sm font-bold text-white shadow-md transition disabled:cursor-not-allowed disabled:bg-gray-400 active:scale-95"
-              >
-                {submitting
-                  ? "Saving..."
-                  : editingBus ? "Save Changes" : "Register Bus"}
+              <button type="button" disabled={submitting} onClick={handleSave}
+                className="rounded-xl bg-[#f5a623] hover:bg-[#e09510] px-8 py-2 text-sm font-bold text-white shadow-md transition disabled:cursor-not-allowed disabled:bg-gray-400 active:scale-95">
+                {submitting ? "Saving..." : editingBus ? "Save Changes" : "Register Bus"}
               </button>
             </div>
           </div>
@@ -1029,40 +1012,23 @@ export default function AdminManageBuses() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
 
-            <button
-              type="button"
-              aria-label="Close view modal"
-              onClick={() => setViewBus(null)}
-              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white"
-            >
-              <FaXmark />
-            </button>
-
             <h3 className="mb-5 text-lg font-bold text-gray-800">Bus Details</h3>
 
-            {/* Header row */}
             <div className="flex items-center gap-4 mb-5">
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 shadow-md">
                 <FiTruck className="w-5 h-5 text-blue-500" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h2 className="text-base font-bold text-[#122843]">
-                    {viewBus.registrationNumber}
-                  </h2>
-                  {viewBus.isActive && (
-                    <MdVerified className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  )}
+                  <h2 className="text-base font-bold text-[#122843]">{viewBus.registrationNumber}</h2>
+                  {viewBus.isActive && <MdVerified className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
                 </div>
-                <p className="text-xs text-gray-400 font-semibold mt-0.5">
-                  {fmtBusId(viewBus.id)}
-                </p>
+                <p className="text-xs text-gray-400 font-semibold mt-0.5">{fmtBusId(viewBus)}</p>
               </div>
             </div>
 
-            {/* Core info */}
             <div className="space-y-2 text-sm text-gray-700 mb-4">
-              <p><strong>Bus ID:</strong> {fmtBusId(viewBus.id)}</p>
+              <p><strong>Bus ID:</strong> {fmtBusId(viewBus)}</p>
               <p><strong>Plate:</strong> {viewBus.registrationNumber}</p>
               <p><strong>Type:</strong> {viewBus.busType}</p>
               <p><strong>Route:</strong> {getRouteName(viewBus)}</p>
@@ -1081,18 +1047,13 @@ export default function AdminManageBuses() {
                     : "•".repeat((pwdMap[viewBus.id] ?? "••••••••••••").length)}
                 </span>
                 {pwdMap[viewBus.id] && (
-                  <button
-                    type="button"
-                    onClick={() => setShowViewPwd((v) => !v)}
-                    className="text-gray-400 hover:text-gray-600 text-sm"
-                  >
+                  <button type="button" onClick={() => setShowViewPwd((v) => !v)}
+                    className="text-gray-400 hover:text-gray-600 text-sm">
                     {showViewPwd ? "🙈" : "👁️"}
                   </button>
                 )}
                 {!pwdMap[viewBus.id] && (
-                  <span className="text-[10px] text-gray-400 italic">
-                    Set via Edit
-                  </span>
+                  <span className="text-[10px] text-gray-400 italic">Set via Edit</span>
                 )}
               </div>
             </div>
@@ -1119,9 +1080,7 @@ export default function AdminManageBuses() {
                 <div className="space-y-3">
                   {(viewBus.drivers ?? []).map((d, i) => (
                     <div key={i} className="bg-white rounded-md border border-gray-200 p-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">
-                        Driver {i + 1}
-                      </p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-2">Driver {i + 1}</p>
                       <div className="grid grid-cols-2 gap-1 text-xs text-gray-700">
                         <p><strong>Name:</strong> {d.name}</p>
                         <p><strong>NIC:</strong> {d.nic}</p>

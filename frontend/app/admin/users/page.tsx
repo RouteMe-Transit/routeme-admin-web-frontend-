@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import toast from "react-hot-toast";
 import { z, ZodIssue } from "zod";
 import {
@@ -30,7 +30,6 @@ type User = {
 };
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
-// Phone: Sri Lankan mobile — exactly 10 digits starting with 07
 const phoneRegex = /^07[0-9]{8}$/;
 
 const createAdminSchema = z.object({
@@ -114,7 +113,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   return json.data as T;
 }
 
-// ─── Password generator (same as bus page) ────────────────────────────────────
+// ─── Password generator ───────────────────────────────────────────────────────
 function generatePassword() {
   const chars =
     "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$!";
@@ -154,6 +153,31 @@ const emptyForm = (): FormValues => ({
   password: "",
 });
 
+// ─── Parse ID search ──────────────────────────────────────────────────────────
+// If the user types "ADM0002", "PAS0001", or just "0002" / "2",
+// extract the numeric part so we can send it as ?id= to the backend.
+function parseIdSearch(raw: string, role: "admin" | "passenger"): { idQuery: string; textQuery: string } {
+  const trimmed = raw.trim().toUpperCase();
+  const prefix = role === "admin" ? "ADM" : "PAS";
+
+  // Matches: ADM0002, PAS0001, BUS0003, or plain digits like 0002 / 2
+  const prefixPattern = /^(ADM|PAS|BUS)(\d+)$/;
+  const digitPattern  = /^\d+$/;
+
+  const prefixMatch = trimmed.match(prefixPattern);
+  if (prefixMatch) {
+    // Strip leading zeros and return as id query
+    return { idQuery: String(parseInt(prefixMatch[2], 10)), textQuery: "" };
+  }
+
+  if (digitPattern.test(trimmed)) {
+    return { idQuery: String(parseInt(trimmed, 10)), textQuery: "" };
+  }
+
+  // Not an ID pattern — treat as normal text search
+  return { idQuery: "", textQuery: raw.trim() };
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function StatCard({
   icon, bg, value, label, color,
@@ -182,7 +206,7 @@ function FieldError({ msg }: { msg?: string }) {
   return <p className="mt-1 text-xs text-red-500 font-semibold">{msg}</p>;
 }
 
-// ─── Confirm modal (replaces SweetAlert) ─────────────────────────────────────
+// ─── Confirm modal ────────────────────────────────────────────────────────────
 function ConfirmModal({
   open, title, message, confirmLabel, confirmClass, onCancel, onConfirm,
 }: {
@@ -226,6 +250,13 @@ const inputNormal = `${inputBase} border-[#828282]/70 focus:border-[#4CAF8A] foc
 const inputErr    = `${inputBase} border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-300 bg-red-50/20`;
 const labelCls    = "block mb-2 font-semibold text-sm text-gray-700";
 
+// ─── Stats type ───────────────────────────────────────────────────────────────
+type StatsData = {
+  passengerCount: number;
+  adminCount: number;
+  suspendedCount: number;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AdminManageUsers() {
   const [users,        setUsers]        = useState<User[]>([]);
@@ -233,20 +264,31 @@ export default function AdminManageUsers() {
   const [activeTab,    setActiveTab]    = useState<"admin" | "passenger">("admin");
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
-  const [showModal,    setShowModal]    = useState(false);
-  const [editingUser,  setEditingUser]  = useState<User | null>(null);
-  const [viewUser,     setViewUser]     = useState<User | null>(null);
-  const [form,         setForm]         = useState<FormValues>(emptyForm());
-  const [fieldErrors,  setFieldErrors]  = useState<FieldErrors>({});
-  const [apiError,     setApiError]     = useState("");
-  const [submitting,   setSubmitting]   = useState(false);
 
-  // ── Password state (same pattern as bus page) ─────────────────────────────
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const [page,       setPage]       = useState(1);
+  const [limit,      setLimit]      = useState(10);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const pageRef  = useRef(1);
+  const limitRef = useRef(10);
+  const syncPage  = (p: number) => { pageRef.current  = p; setPage(p);  };
+  const syncLimit = (l: number) => { limitRef.current = l; setLimit(l); };
+
+  const [stats,       setStats]       = useState<StatsData>({ passengerCount: 0, adminCount: 0, suspendedCount: 0 });
+  const [showModal,   setShowModal]   = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [viewUser,    setViewUser]    = useState<User | null>(null);
+  const [form,        setForm]        = useState<FormValues>(emptyForm());
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [apiError,    setApiError]    = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
+
   const [passwordMode, setPasswordMode] = useState<"auto" | "custom">("auto");
   const [autoPassword, setAutoPassword] = useState(generatePassword);
   const [showPassword, setShowPassword] = useState(false);
 
-  // ── Confirm modal state ────────────────────────────────────────────────────
   const [confirmState, setConfirmState] = useState<{
     open: boolean;
     title: string;
@@ -255,48 +297,96 @@ export default function AdminManageUsers() {
     confirmClass: string;
     onConfirm: () => void;
   }>({
-    open: false,
-    title: "",
-    message: "",
-    confirmLabel: "",
-    confirmClass: "",
-    onConfirm: () => {},
+    open: false, title: "", message: "", confirmLabel: "", confirmClass: "", onConfirm: () => {},
   });
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-  const loadUsers = useCallback(async () => {
+  // ── Load stats ────────────────────────────────────────────────────────────
+  const loadStats = useCallback(async () => {
     try {
-      setLoading(true);
-      const res = await apiFetch<{ total: number; users: User[] }>("/users");
-      setUsers(res.users ?? []);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load users");
-    } finally {
-      setLoading(false);
-    }
+      const res = await apiFetch<{ total: number; totalPages: number; users: User[] }>(
+        `/users?limit=500&page=1`
+      );
+      const all = res.users ?? [];
+      setStats({
+        passengerCount: all.filter((u) => u.role === "passenger").length,
+        adminCount:     all.filter((u) => u.role === "admin").length,
+        suspendedCount: all.filter((u) => !u.isActive).length,
+      });
+    } catch { /* non-critical */ }
   }, []);
 
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  // ── Core fetch ────────────────────────────────────────────────────────────
+  const fetchUsers = useCallback(
+    async (opts?: { search?: string; signal?: AbortSignal }) => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams();
+        params.set("role",  activeTab);
+        params.set("page",  String(pageRef.current));
+        params.set("limit", String(limitRef.current));
+        if (statusFilter) params.set("status", statusFilter);
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-  const filtered = users.filter((u) => {
-    const q = search.toLowerCase();
-    const matchSearch =
-      u.firstName?.toLowerCase().includes(q) ||
-      u.lastName?.toLowerCase().includes(q)  ||
-      u.email?.toLowerCase().includes(q);
-    const matchTab    = u.role === activeTab;
-    const matchStatus =
-      statusFilter === "" ||
-      (statusFilter === "active" ? u.isActive : !u.isActive);
-    return matchSearch && matchTab && matchStatus;
-  });
+        // ── Smart ID / text search ──────────────────────────────────────────
+        // Parse what the user typed: if it looks like an ID (ADM0002, 0002, 2)
+        // send it as ?id=, otherwise send it as the normal ?search= text param.
+        if (opts?.search) {
+          const { idQuery, textQuery } = parseIdSearch(opts.search, activeTab);
+          if (idQuery)   params.set("id",     idQuery);
+          if (textQuery) params.set("search", textQuery);
+        }
 
-  const passengerCount = users.filter((u) => u.role === "passenger").length;
-  const adminCount     = users.filter((u) => u.role === "admin").length;
-  const suspendedCount = users.filter((u) => !u.isActive).length;
+        const res = await apiFetch<{ total: number; totalPages: number; users: User[] }>(
+          `/users?${params.toString()}`,
+          { signal: opts?.signal }
+        );
+        setUsers(res.users ?? []);
+        setTotalUsers(res.total ?? 0);
+        setTotalPages(res.totalPages ?? 1);
+      } catch (err) {
+        const isAbort = (err as any)?.name === "AbortError";
+        if (!isAbort)
+          toast.error(err instanceof Error ? err.message : "Failed to load users");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeTab, statusFilter]
+  );
 
-  // ── Modal helpers ─────────────────────────────────────────────────────────
+  // ── Debounced search ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetchUsers({ search: search.trim() || undefined, signal: controller.signal });
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [search, fetchUsers]);
+
+  // ── Tab / status filter change ────────────────────────────────────────────
+  useEffect(() => {
+    syncPage(1);
+    void fetchUsers({ search: search.trim() || undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, statusFilter]);
+
+  // ── Page / limit change ───────────────────────────────────────────────────
+  useEffect(() => {
+    void fetchUsers({ search: search.trim() || undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit]);
+
+  // ── Stats on mount ────────────────────────────────────────────────────────
+  useEffect(() => { void loadStats(); }, [loadStats]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const safePage = Math.min(page, Math.max(1, totalPages));
+
+  // Placeholder hint changes based on active tab
+  const searchPlaceholder =
+    activeTab === "admin"
+      ? "Search name, email or ADM0001…"
+      : "Search name, email or PAS0001…";
+
   const openAdd = () => {
     setEditingUser(null);
     setForm(emptyForm());
@@ -319,25 +409,22 @@ export default function AdminManageUsers() {
     });
     setFieldErrors({});
     setApiError("");
-    setPasswordMode("auto"); // "auto" in edit = keep existing
+    setPasswordMode("auto");
     setShowPassword(false);
     setShowModal(true);
   };
 
-  // Clear individual field error when user types
   const setField = (key: keyof FormValues, val: string) => {
     setForm((f) => ({ ...f, [key]: val }));
     if (fieldErrors[key]) setFieldErrors((e) => ({ ...e, [key]: undefined }));
   };
 
-  // ── Save — Zod validates trimmed string values ────────────────────────────
+  // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    // Determine final password
     const finalPassword = !editingUser
       ? passwordMode === "auto" ? autoPassword : form.password
-      : passwordMode === "custom" ? form.password : ""; // "" = keep existing on edit
+      : passwordMode === "custom" ? form.password : "";
 
-    // Build object for Zod — always use trimmed strings
     const toValidate = editingUser
       ? {
           firstName: form.firstName.trim(),
@@ -367,7 +454,6 @@ export default function AdminManageUsers() {
       return;
     }
 
-    // Extra check: edit + custom password provided but too short
     if (editingUser && passwordMode === "custom" && form.password.trim() !== "") {
       if (form.password.length < 8) {
         setFieldErrors((e) => ({ ...e, password: "Password must be at least 8 characters" }));
@@ -405,7 +491,8 @@ export default function AdminManageUsers() {
         });
         toast.success("Admin created successfully");
       }
-      await loadUsers();
+      await fetchUsers({ search: search.trim() || undefined });
+      await loadStats();
       setShowModal(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
@@ -428,7 +515,8 @@ export default function AdminManageUsers() {
         setConfirmState((s) => ({ ...s, open: false }));
         try {
           await apiFetch(`/users/${user.id}`, { method: "DELETE" });
-          await loadUsers();
+          await fetchUsers({ search: search.trim() || undefined });
+          await loadStats();
           toast.success("User suspended successfully");
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Failed to suspend user");
@@ -452,7 +540,8 @@ export default function AdminManageUsers() {
             method: "PUT",
             body: JSON.stringify({ isActive: true }),
           });
-          await loadUsers();
+          await fetchUsers({ search: search.trim() || undefined });
+          await loadStats();
           toast.success("User reactivated successfully");
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Failed to reactivate user");
@@ -468,25 +557,34 @@ export default function AdminManageUsers() {
 
         {/* ── STATS ── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard icon={<FiUsers  className="w-5 h-5 text-blue-500"  />} bg="bg-blue-50"  value={passengerCount} label="Total Passengers" color="text-blue-600"  />
-          <StatCard icon={<FiShield className="w-5 h-5 text-amber-500" />} bg="bg-amber-50" value={adminCount}     label="Total Admins"     color="text-amber-600" />
-          <StatCard icon={<FiUserX  className="w-5 h-5 text-red-400"   />} bg="bg-red-50"   value={suspendedCount} label="Suspended Users"  color="text-red-500"   />
+          <StatCard icon={<FiUsers  className="w-5 h-5 text-blue-500"  />} bg="bg-blue-50"  value={stats.passengerCount} label="Total Passengers" color="text-blue-600"  />
+          <StatCard icon={<FiShield className="w-5 h-5 text-amber-500" />} bg="bg-amber-50" value={stats.adminCount}     label="Total Admins"     color="text-amber-600" />
+          <StatCard icon={<FiUserX  className="w-5 h-5 text-red-400"   />} bg="bg-red-50"   value={stats.suspendedCount} label="Suspended Users"  color="text-red-500"   />
         </div>
 
         {/* ── TOOLBAR ── */}
         <div className="rounded-xl border border-gray-100 mb-4">
           <div className="flex flex-wrap items-center gap-3">
 
-            {/* Search — identical to alerts page */}
+            {/* Search — accepts name, email, or ID (ADM0002 / PAS0001 / 0002 / 2) */}
             <div className="flex items-center gap-2 bg-white border border-[#828282]/40 rounded-lg px-3 py-2 w-80 shadow-sm">
               <FaMagnifyingGlass className="w-4 h-4 opacity-50" aria-hidden="true" />
               <input
                 type="text"
-                placeholder="Search by name or email..."
+                placeholder={searchPlaceholder}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); syncPage(1); }}
                 className="flex-1 text-sm bg-transparent outline-none text-black"
               />
+              {search && (
+                <button
+                  onClick={() => { setSearch(""); syncPage(1); }}
+                  className="text-gray-400 hover:text-gray-600"
+                  aria-label="Clear search"
+                >
+                  <FaXmark className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Status filter */}
@@ -500,7 +598,7 @@ export default function AdminManageUsers() {
               <option value="inactive">Inactive</option>
             </select>
 
-            {/* Tab switcher — Admin tab is amber/yellow */}
+            {/* Tab switcher */}
             <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
               {(["passenger", "admin"] as const).map((tab) => (
                 <button
@@ -519,7 +617,7 @@ export default function AdminManageUsers() {
               ))}
             </div>
 
-            {/* Add Admin — amber/yellow like bus page */}
+            {/* Add Admin — only on admin tab */}
             {activeTab === "admin" && (
               <button
                 onClick={openAdd}
@@ -551,20 +649,22 @@ export default function AdminManageUsers() {
               {/* Body */}
               {loading ? (
                 <div className="px-4 py-8 text-center text-gray-500 text-sm">Loading users...</div>
-              ) : filtered.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500 text-sm">No {activeTab} users found</div>
+              ) : users.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                  {search
+                    ? `No ${activeTab} users found for "${search}"`
+                    : `No ${activeTab} users found`}
+                </div>
               ) : (
-                filtered.map((user) => (
+                users.map((user) => (
                   <div
                     key={user.id}
                     className="grid grid-cols-[90px_180px_220px_130px_90px_110px_116px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition"
                   >
-                    {/* ID — same style as alerts page */}
                     <div className="font-semibold text-[#122843] whitespace-nowrap">
                       {fmtId(user.role, user.id)}
                     </div>
 
-                    {/* Name + avatar */}
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className={`w-8 h-8 rounded-full ${avatarColor(user.id)} flex items-center justify-center text-white text-xs font-black flex-shrink-0 shadow-sm`}>
                         {getInitials(user.firstName, user.lastName)}
@@ -574,23 +674,16 @@ export default function AdminManageUsers() {
                       </span>
                     </div>
 
-                    {/* Email */}
                     <div className="text-gray-600 text-sm truncate pr-3">{user.email}</div>
-
-                    {/* Phone */}
                     <div className="text-gray-600 text-sm">{user.phone || "—"}</div>
-
-                    {/* Joined */}
                     <div className="text-gray-600 text-sm">{fmtDate(user.createdAt)}</div>
 
-                    {/* Status — same badge style as alerts page */}
                     <div>
                       <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${user.isActive ? "bg-emerald-600 text-white" : "bg-red-500 text-white"}`}>
                         {user.isActive ? "Active" : "Inactive"}
                       </span>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex items-center justify-center gap-1.5">
                       <button onClick={() => setViewUser(user)} title="View details" className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 shadow-sm transition">
                         <IoEye className="text-blue-600 w-4 h-4" />
@@ -614,6 +707,58 @@ export default function AdminManageUsers() {
             </div>
           </div>
         </div>
+
+        {/* ── PAGINATION ── */}
+        {!loading && totalUsers > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-gray-600">
+              Showing {(safePage - 1) * limit + 1} to {Math.min(safePage * limit, totalUsers)} of {totalUsers} {activeTab} users
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => syncPage(Math.max(1, pageRef.current - 1))}
+                disabled={safePage <= 1}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => syncPage(pageNumber)}
+                    className={`min-w-9 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                      pageNumber === safePage
+                        ? "bg-[#4CAF8A] text-white"
+                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => syncPage(Math.min(totalPages, pageRef.current + 1))}
+                disabled={safePage >= totalPages}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <select
+                value={limit}
+                onChange={(e) => { syncLimit(Number(e.target.value)); syncPage(1); }}
+                className="h-9 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -622,15 +767,6 @@ export default function AdminManageUsers() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 w-full max-w-md max-h-[92vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
-
-            <button
-              type="button"
-              aria-label="Close modal"
-              onClick={() => setShowModal(false)}
-              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white"
-            >
-              <FaXmark />
-            </button>
 
             <h3 className="mb-1 text-lg font-bold text-gray-800">
               {editingUser ? "Edit User" : "Add New Admin"}
@@ -644,7 +780,6 @@ export default function AdminManageUsers() {
               Fields marked with <span className="text-red-600">*</span> are mandatory.
             </p>
 
-            {/* API error */}
             {apiError && (
               <div className="mb-4 flex items-start gap-2 rounded-md border border-red-100 bg-red-50 p-3 text-xs font-semibold text-red-600">
                 <span className="mt-0.5">⚠</span>
@@ -662,10 +797,7 @@ export default function AdminManageUsers() {
                     className={fieldErrors.firstName ? inputErr : inputNormal}
                     placeholder="Kavindu"
                     value={form.firstName}
-                    onChange={(e) => {
-                      // Strip non-letter characters as user types
-                      setField("firstName", e.target.value.replace(/[^A-Za-z]/g, ""));
-                    }}
+                    onChange={(e) => setField("firstName", e.target.value.replace(/[^A-Za-z]/g, ""))}
                   />
                   <FieldError msg={fieldErrors.firstName} />
                 </div>
@@ -675,9 +807,7 @@ export default function AdminManageUsers() {
                     className={fieldErrors.lastName ? inputErr : inputNormal}
                     placeholder="Perera"
                     value={form.lastName}
-                    onChange={(e) => {
-                      setField("lastName", e.target.value.replace(/[^A-Za-z]/g, ""));
-                    }}
+                    onChange={(e) => setField("lastName", e.target.value.replace(/[^A-Za-z]/g, ""))}
                   />
                   <FieldError msg={fieldErrors.lastName} />
                 </div>
@@ -707,26 +837,20 @@ export default function AdminManageUsers() {
                   placeholder="0712345678"
                   maxLength={10}
                   value={form.phone}
-                  onChange={(e) => {
-                    // Only allow digits
-                    setField("phone", e.target.value.replace(/\D/g, ""));
-                  }}
+                  onChange={(e) => setField("phone", e.target.value.replace(/\D/g, ""))}
                 />
                 <FieldError msg={fieldErrors.phone} />
                 {!fieldErrors.phone && (
-                  <p className="mt-1 text-[10px] text-gray-400">
-                    10 digits, must start with 07
-                  </p>
+                  <p className="mt-1 text-[10px] text-gray-400">10 digits, must start with 07</p>
                 )}
               </div>
 
-              {/* ── Password — matches bus page style exactly ── */}
+              {/* Password */}
               <div>
                 <label className={labelCls}>
                   {editingUser ? "Password" : <>Admin Password <span className="text-red-600">*</span></>}
                 </label>
 
-                {/* Mode toggle buttons */}
                 <div className="flex gap-2 mb-3">
                   {(["auto", "custom"] as const).map((mode) => (
                     <button
@@ -749,7 +873,6 @@ export default function AdminManageUsers() {
                   ))}
                 </div>
 
-                {/* Auto mode — show generated password with toggle + regenerate */}
                 {passwordMode === "auto" && !editingUser && (
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-10 border border-dashed border-[#4CAF8A] rounded-lg px-3 flex items-center justify-between bg-green-50">
@@ -775,7 +898,6 @@ export default function AdminManageUsers() {
                   </div>
                 )}
 
-                {/* Keep existing — just informational */}
                 {passwordMode === "auto" && editingUser && (
                   <div className="h-10 border border-dashed border-gray-300 rounded-lg px-3 flex items-center bg-gray-50">
                     <span className="text-xs text-gray-400 italic">
@@ -784,7 +906,6 @@ export default function AdminManageUsers() {
                   </div>
                 )}
 
-                {/* Custom password input */}
                 {passwordMode === "custom" && (
                   <div className="relative">
                     <input
@@ -821,7 +942,6 @@ export default function AdminManageUsers() {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
@@ -849,15 +969,6 @@ export default function AdminManageUsers() {
       {viewUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative mx-4 w-full max-w-md max-h-[85vh] overflow-y-auto rounded-lg bg-white p-6 shadow-lg">
-
-            <button
-              type="button"
-              aria-label="Close view modal"
-              onClick={() => setViewUser(null)}
-              className="absolute right-4 top-4 rounded-full border border-red-500 p-1 text-xl text-red-500 hover:bg-red-500 hover:text-white"
-            >
-              <FaXmark />
-            </button>
 
             <h3 className="mb-5 text-lg font-bold text-gray-800">User Details</h3>
 
