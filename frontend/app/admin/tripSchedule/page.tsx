@@ -6,7 +6,6 @@ import { IoEye, IoSearch, IoAddCircle } from "react-icons/io5";
 import { IoPencil } from "react-icons/io5";
 import { IoBan, IoCheckmarkCircle } from "react-icons/io5";
 import {
-  FaCheckCircle,
   FaCalendarAlt,
 } from "react-icons/fa";
 import { MdDirectionsBus, MdSchedule } from "react-icons/md";
@@ -72,9 +71,16 @@ function displayDuration(trip: Trip): string {
   return trip.duration ?? calcDuration(trip.departureTime, trip.arrivalTime);
 }
 
+// Formats a "HH:MM[:SS]" 24-hour time string into 12-hour "H:MM AM/PM" for display.
 function fmtTime(t: string | null): string {
   if (!t) return "—";
-  return t.slice(0, 5);
+  const [hStr, mStr] = t.slice(0, 5).split(":");
+  let h = parseInt(hStr, 10);
+  const m = mStr;
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${period}`;
 }
 
 function fmtDays(days: Day[]): string {
@@ -193,7 +199,7 @@ export default function AdminManageTrips() {
   const [totalTrips, setTotalTrips] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  const [stats, setStats] = useState({ total: 0, active: 0, cancelled: 0 });
+  const [stats, setStats] = useState({ total: 0, cancelled: 0 });
 
   const [showModal,   setShowModal]   = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
@@ -223,10 +229,9 @@ export default function AdminManageTrips() {
   // ── Load stats ─────────────────────────────────────────────────────────────
   const loadStats = useCallback(async () => {
     try {
-      const { data } = await api.get<{ data: { total: number; active: number; cancelled: number } }>("/trips/stats");
+      const { data } = await api.get<{ data: { total: number; cancelled: number } }>("/trips/stats");
       setStats({
         total:     data.data.total     ?? 0,
-        active:    data.data.active    ?? 0,
         cancelled: data.data.cancelled ?? 0,
       });
     } catch { /* non-critical */ }
@@ -317,8 +322,8 @@ export default function AdminManageTrips() {
       routeId:       trip.routeId,
       busId:         trip.busId,
       direction:     trip.direction,
-      departureTime: fmtTime(trip.departureTime),
-      arrivalTime:   fmtTime(trip.arrivalTime),
+      departureTime: trip.departureTime.slice(0, 5),
+      arrivalTime:   trip.arrivalTime.slice(0, 5),
       days:          trip.days ?? [],
       status:        trip.status,
     });
@@ -388,8 +393,8 @@ export default function AdminManageTrips() {
             routeId:       trip.routeId,
             busId:         trip.busId,
             direction:     trip.direction,
-            departureTime: fmtTime(trip.departureTime),
-            arrivalTime:   fmtTime(trip.arrivalTime),
+            departureTime: trip.departureTime.slice(0, 5),
+            arrivalTime:   trip.arrivalTime.slice(0, 5),
             days:          trip.days,
             status:        "cancelled",
             isActive:      false,
@@ -419,8 +424,8 @@ export default function AdminManageTrips() {
             routeId:       trip.routeId,
             busId:         trip.busId,
             direction:     trip.direction,
-            departureTime: fmtTime(trip.departureTime),
-            arrivalTime:   fmtTime(trip.arrivalTime),
+            departureTime: trip.departureTime.slice(0, 5),
+            arrivalTime:   trip.arrivalTime.slice(0, 5),
             days:          trip.days,
             status:        "active",
             isActive:      true,
@@ -441,11 +446,9 @@ export default function AdminManageTrips() {
       <section className="p-6">
 
         {/* ── STAT CARDS ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <StatCard icon={<MdDirectionsBus className="w-5 h-5 text-blue-500" />}
             bg="bg-blue-50"    value={stats.total}     label="Total Trips" color="text-blue-600" />
-          <StatCard icon={<FaCheckCircle className="w-5 h-5 text-emerald-500" />}
-            bg="bg-emerald-50" value={stats.active}    label="Active Now"  color="text-emerald-600" />
           <StatCard icon={<FaCalendarAlt className="w-5 h-5 text-red-500" />}
             bg="bg-red-50"     value={stats.cancelled} label="Cancelled"   color="text-red-600" />
         </div>
@@ -509,7 +512,7 @@ export default function AdminManageTrips() {
             <div className="min-w-max md:min-w-full">
 
               {/* Header */}
-              <div className="grid grid-cols-[100px_1fr_140px_90px_90px_100px_150px_116px] bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-700 border-b uppercase">
+              <div className="grid grid-cols-[100px_1fr_140px_100px_100px_100px_150px_116px] bg-[#f5f8fc] px-4 py-3 text-xs font-extrabold text-gray-700 border-b uppercase">
                 <div>Trip ID</div>
                 <div>Route</div>
                 <div>Bus</div>
@@ -540,7 +543,7 @@ export default function AdminManageTrips() {
               ) : (
                 trips.map((trip) => (
                   <div key={trip.id}
-                    className="grid grid-cols-[100px_1fr_140px_90px_90px_100px_150px_116px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition">
+                    className="grid grid-cols-[100px_1fr_140px_100px_100px_100px_150px_116px] items-center px-4 py-3 text-sm text-black border-b hover:bg-gray-50 transition">
 
                     <div className="font-semibold text-[#122843] whitespace-nowrap">
                       {fmtTripId(trip.id)}
@@ -568,11 +571,11 @@ export default function AdminManageTrips() {
                       )}
                     </div>
 
-                    <div className="font-mono font-semibold text-gray-700 text-sm">
+                    <div className="font-mono font-semibold text-gray-700 text-sm whitespace-nowrap">
                       {fmtTime(trip.departureTime)}
                     </div>
 
-                    <div className="font-mono font-semibold text-gray-700 text-sm">
+                    <div className="font-mono font-semibold text-gray-700 text-sm whitespace-nowrap">
                       {fmtTime(trip.arrivalTime)}
                     </div>
 
