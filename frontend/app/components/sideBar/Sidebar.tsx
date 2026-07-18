@@ -42,6 +42,15 @@ type BackendAlert = {
   isRead?: boolean;
 };
 
+type SidebarUser = {
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  name?: string;
+  role?: string;
+  image?: string;
+};
+
 const ALERT_FEED_LIMIT = 50;
 
 function getAuthConfig() {
@@ -169,7 +178,32 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const [unreadPassengerAlerts, setUnreadPassengerAlerts] = useState(0);
   const [expandedSection, setExpandedSection] = useState<string | null>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<SidebarUser | null>(null);
   const isGpsEnabled = gpsEnabled ?? localGpsEnabled;
+
+  const loadCurrentUser = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const rawValue = window.localStorage.getItem("user");
+      if (!rawValue) {
+        setCurrentUser(null);
+        return;
+      }
+
+      const parsed = JSON.parse(rawValue) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        setCurrentUser(null);
+        return;
+      }
+
+      setCurrentUser(parsed as SidebarUser);
+    } catch {
+      setCurrentUser(null);
+    }
+  }, []);
 
   const loadUnreadPassengerAlerts = useCallback(async () => {
     if (role !== "passenger") {
@@ -220,6 +254,20 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    loadCurrentUser();
+
+    const syncCurrentUser = () => {
+      loadCurrentUser();
+    };
+
+    window.addEventListener("storage", syncCurrentUser);
+
+    return () => {
+      window.removeEventListener("storage", syncCurrentUser);
+    };
+  }, [loadCurrentUser]);
+
   const items = menus[role] as MenuItem[];
 
   const renderMenuItem = (item: MenuItem, indented = false) => {
@@ -244,6 +292,15 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
   const toggleSection = (sectionId: string) => {
     setExpandedSection((prev) => (prev === sectionId ? null : sectionId));
   };
+
+  const userDisplayName =
+    currentUser?.displayName?.trim() ||
+    currentUser?.name?.trim() ||
+    `${currentUser?.firstName ?? ""} ${currentUser?.lastName ?? ""}`.trim() ||
+    "Signed in user";
+
+  const userRoleLabel = currentUser?.role?.trim() || role;
+  const userImage = currentUser?.image?.trim() || "/default-profile-image.svg";
 
   return (
     <>
@@ -335,10 +392,10 @@ export default function Sidebar({ role, gpsEnabled, onGpsToggle }: Props) {
                 }}
                 className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-gray-700 transition"
               >
-                <img src="/default-profile-image.svg" alt="Profile" className="w-10 h-10 rounded-full object-cover mr-4" />
+                <img src={userImage} alt="Profile" className="w-10 h-10 rounded-full object-cover mr-4" />
                 <div className="text-left">
-                  <p className="font-semibold">User Name</p>
-                  <p className="text-sm text-gray-400 capitalize">{role}</p>
+                  <p className="font-semibold">{userDisplayName}</p>
+                  <p className="text-sm text-gray-400 capitalize">{userRoleLabel}</p>
                 </div>
             </button>
           )}
