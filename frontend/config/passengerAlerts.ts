@@ -41,9 +41,16 @@ export function getSeenPassengerAlertIds() {
 }
 
 export function markPassengerAlertsAsSeen(alertIds: string[]) {
+	const nextSeenIds = new Set(getSeenPassengerAlertIds());
+	for (const alertId of alertIds) {
+		if (typeof alertId === "string" && alertId.trim()) {
+			nextSeenIds.add(alertId.trim());
+		}
+	}
+
 	if (typeof window !== "undefined") {
 		try {
-			window.sessionStorage.setItem(PASSENGER_ALERTS_SEEN_IDS_STORAGE_KEY, JSON.stringify(alertIds));
+			window.sessionStorage.setItem(PASSENGER_ALERTS_SEEN_IDS_STORAGE_KEY, JSON.stringify([...nextSeenIds]));
 		} catch {
 			// Ignore storage failures and fall back to in-memory updates.
 		}

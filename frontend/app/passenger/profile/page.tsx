@@ -18,6 +18,7 @@ type FavoriteRoute = {
     routeName: string;
     from?: string;
     to?: string;
+    addedAt?: string;
 };
 
 type FeedbackItem = {

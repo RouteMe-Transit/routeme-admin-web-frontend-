@@ -2,6 +2,8 @@
 
 "use client";
 
+import NotificationCountBadge from "@/app/passenger/alerts/NotificationCountBadge";
+
 type Props = {
   label: string;
   icon?: React.ReactNode;
@@ -28,13 +30,9 @@ export default function SidebarItem({
         }
       `}
     >
-      <div className="text-2xl relative inline-block">
+      <div className="relative inline-flex items-center justify-center text-2xl">
         {icon}
-        {typeof badgeCount === "number" && badgeCount > 0 && (
-          <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white animate-pulse">
-            {badgeCount > 99 ? "99+" : badgeCount}
-          </span>
-        )}
+        <NotificationCountBadge count={badgeCount ?? 0} className="absolute -right-2 -top-2" />
       </div>
       <span className="font-semibold text-xl">{label}</span>
     </button>
