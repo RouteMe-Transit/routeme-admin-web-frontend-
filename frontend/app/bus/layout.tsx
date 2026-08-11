@@ -21,8 +21,17 @@ type BusInfo = {
     busId?: string;
     routeNumber?: string;
     routeName?: string;
-    drivers?: string[];
+    drivers?: AssignedDriver[];
     defaultDriver?: string;
+};
+
+type AssignedDriver = {
+    id?: string | number;
+    firstName?: string;
+    lastName?: string;
+    fullName?: string;
+    phone?: string;
+    status?: string;
 };
 
 const getAuthHeaders = () => {
@@ -60,6 +69,28 @@ async function postBusLiveLocation(payload: {
         const errorText = await response.text();
         throw new Error(errorText || `Failed to update live location (${response.status})`);
     }
+}
+
+async function fetchAssignedDrivers(): Promise<AssignedDriver[]> {
+    const response = await fetch(`${getApiBaseUrl()}/buses/me/assigned-drivers`, {
+        cache: "no-store",
+        headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+        },
+    });
+
+    if (!response.ok) {
+        return [];
+    }
+
+    const data = (await response.json()) as {
+        data?: {
+            drivers?: AssignedDriver[];
+        };
+    };
+
+    return Array.isArray(data?.data?.drivers) ? data.data.drivers : [];
 }
 
 export default function BusLayout({ children }: BusLayoutProps) {
@@ -294,7 +325,7 @@ function BusLayoutContent({ children }: BusLayoutProps) {
                     busId,
                     routeNumber: firstTrip?.routeNumber ?? undefined,
                     routeName,
-                    drivers: firstTrip?.drivers ?? undefined,
+                    drivers: await fetchAssignedDrivers(),
                     defaultDriver: firstTrip?.defaultDriver ?? undefined,
                 });
             } catch (error) {

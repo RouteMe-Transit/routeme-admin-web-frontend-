@@ -9,7 +9,14 @@ type BusInfo = {
   busId?: string;
   routeNumber?: string;
   routeName?: string;
-  drivers?: string[];
+  drivers?: {
+    id?: string | number;
+    firstName?: string;
+    lastName?: string;
+    fullName?: string;
+    phone?: string;
+    status?: string;
+  }[];
   defaultDriver?: string;
 };
 
@@ -44,7 +51,7 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
     : isAdminRoute
     ? "admin-topbar"
     : "passenger-topbar";
-  const defaultDriver = busInfo?.defaultDriver ?? busInfo?.drivers?.[0] ?? "";
+  const defaultDriver = busInfo?.defaultDriver ?? String(busInfo?.drivers?.[0]?.id ?? "");
   const driverSelectKey = `${busInfo?.busId ?? "no-bus"}-${defaultDriver}`;
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [routesLoading, setRoutesLoading] = useState(false);
@@ -163,12 +170,31 @@ const TopBar = ({ title, icon, busInfo, gpsEnabled = false }: TopBarProps) => {
             <div className="col-span-1 mt-2 sm:mt-0 flex justify-start sm:justify-end items-center">
               <div className="rounded-md border border-[#94A0AE] bg-slate-50 px-3 py-2">
                 <label className="text-xs font-semibold text-slate-500">Driver</label>
-                <select key={driverSelectKey} className="ml-2 w-24 rounded bg-white px-2 py-1 text-sm text-slate-700 outline-none" defaultValue={defaultDriver}>
-                  {(busInfo.drivers ?? []).map((driver) => (
-                    <option key={driver} value={driver}>
-                      {driver}
+                <select
+                  key={driverSelectKey}
+                  className="ml-2 w-40 rounded bg-white px-2 py-1 text-sm text-slate-700 outline-none"
+                  defaultValue={defaultDriver || "none"}
+                >
+                  {(busInfo.drivers ?? []).length === 0 ? (
+                    <option value="none" disabled>
+                      No drivers assigned
                     </option>
-                  ))}
+                  ) : (
+                    <>
+                      <option value="none" disabled>
+                        Select driver
+                      </option>
+                      {(busInfo.drivers ?? []).map((driver) => {
+                        const label = driver.fullName?.trim() || `${driver.firstName ?? ""} ${driver.lastName ?? ""}`.trim() || `Driver ${driver.id ?? ""}`;
+
+                        return (
+                          <option key={String(driver.id ?? label)} value={String(driver.id ?? label)}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </>
+                  )}
                 </select>
               </div>
             </div>
