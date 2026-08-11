@@ -7,6 +7,13 @@ import CalendarPlaceholder from "./CalendarPlaceholder";
 
 import { RouteSummary, searchRoutes } from "../../services/routeService";
 
+function toDateParam(d: Date): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
 export default function PassengerRouteFinderPage() {
     const [routes, setRoutes] = useState<RouteSummary[]>([]);
     const [loading, setLoading] = useState(false);
@@ -17,7 +24,8 @@ export default function PassengerRouteFinderPage() {
         setLoading(true);
         setSelectedId(null);
         try {
-            const results = await searchRoutes({ from, to });
+            const date = selectedDate ? toDateParam(selectedDate) : undefined;
+            const results = await searchRoutes({ from, to, date });
             setRoutes(results);
             if (results.length) setSelectedId(results[0].id);
         } catch (e) {
