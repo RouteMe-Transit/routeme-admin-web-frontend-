@@ -27,7 +27,7 @@ export default function ReportsPage() {
     try {
       const parsed = z.object({ content: z.string().min(10, "Report must be at least 10 characters") }).safeParse({ content: reportText });
       if (!parsed.success) {
-        toast.error(parsed.error.errors[0].message);
+        toast.error(parsed.error.issues[0].message);
         return;
       }
 

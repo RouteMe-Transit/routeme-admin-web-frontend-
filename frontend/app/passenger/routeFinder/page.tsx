@@ -28,7 +28,7 @@ export default function PassengerRouteFinderPage() {
             const results = await searchRoutes({ from, to, date });
             setRoutes(results);
             if (results.length) setSelectedId(results[0].id);
-        } catch (e) {
+        } catch {
             setRoutes([]);
         } finally {
             setLoading(false);
@@ -48,7 +48,7 @@ export default function PassengerRouteFinderPage() {
                         {loading ? (
                             <div className="p-6 bg-white rounded-lg">Searching...</div>
                         ) : (
-                            <SuggestedRoutes routes={routes} onSelect={setSelectedId as any} />
+                            <SuggestedRoutes routes={routes} onSelect={setSelectedId} />
                         )}
 
                         <RouteDetails routeId={selectedId} />
