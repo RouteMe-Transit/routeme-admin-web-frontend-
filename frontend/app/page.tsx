@@ -9,7 +9,9 @@ import { useEffect } from "react";
 
 export default function Home() {
   useEffect(() => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    const rawUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
+    const cleanUrl = rawUrl.replace(/\/+$/, "");
+    const API_URL = cleanUrl.endsWith("/api/v1") ? cleanUrl : `${cleanUrl}/api/v1`;
 
     fetch(`${API_URL}/test`)
       .then((res) => {
@@ -24,8 +26,8 @@ export default function Home() {
         }
       })
       .catch((err) => {
-        console.error(err);
-        alert("❌ Backend NOT Connected!");
+        console.error("Connection error:", err);
+        alert("❌ Backend NOT Connected! Please check if the backend service is running.");
       });
   }, []);
 
