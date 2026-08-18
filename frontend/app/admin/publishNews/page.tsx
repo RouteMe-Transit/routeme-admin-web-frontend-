@@ -108,9 +108,25 @@ const formatDate = (dateStr?: string | null) => {
   }
 };
 
+// ── Responsive hook ──────────────────────────────────────────────────────────
+// Mirrors Tailwind's `md` breakpoint (768px) used on your buses page.
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function AdminPublishNews() {
   const { isDarkMode } = useAdminTheme();
+  const isMobile = useIsMobile();
 
   // Form state
   const [title,          setTitle]          = useState("");
@@ -250,7 +266,6 @@ export default function AdminPublishNews() {
     const token      = getAuthToken();
     const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
-    // Upload image to Supabase first, then send URL to backend
     let imageUrl: string | undefined;
     if (coverFile.current) {
       imageUrl = await uploadImageToSupabase(coverFile.current);
@@ -347,10 +362,25 @@ export default function AdminPublishNews() {
 
   const badge = CATEGORY_BADGE_STYLES[category];
 
+  // Responsive helpers
+  const cardPadding   = isMobile ? "20px" : "36px";
+  const modalPadding  = isMobile ? "20px 20px 28px" : "28px 36px 40px";
+  const outerPadding  = isMobile ? "12px" : "24px";
+  const modalOuterPad = isMobile ? "16px 8px" : "32px 16px";
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background: outerBg, minHeight: "100%", width: "100%", padding: "24px", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", maxWidth: "1280px", width: "100%" }}>
+    <div style={{ background: outerBg, minHeight: "100%", width: "100%", padding: outerPadding, boxSizing: "border-box" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? "16px" : "24px",
+          alignItems: "flex-start",
+          maxWidth: "1280px",
+          width: "100%",
+        }}
+      >
 
         {/* ── Left: Publish Form ─────────────────────────────────────────── */}
         <div
@@ -358,27 +388,30 @@ export default function AdminPublishNews() {
             background: bg,
             borderRadius: "14px",
             boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-            padding: "36px",
+            padding: cardPadding,
             flex: "1 1 0",
             minWidth: 0,
+            width: "100%",
+            boxSizing: "border-box",
           }}
         >
           {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: isMobile ? "24px" : "32px" }}>
             <div
               style={{
                 width: "40px", height: "40px", borderRadius: "10px",
                 background: "linear-gradient(135deg, #122843, #1b3a5c)",
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
+                flexShrink: 0,
               }}
             >
               📰
             </div>
             <div>
-              <h2 style={{ fontSize: "20px", fontWeight: 800, color: isDarkMode ? "#fff" : "#1b3a5c", margin: 0 }}>
+              <h2 style={{ fontSize: isMobile ? "17px" : "20px", fontWeight: 800, color: isDarkMode ? "#fff" : "#1b3a5c", margin: 0 }}>
                 Create New Article
               </h2>
-              <p style={{ fontSize: "13px", color: isDarkMode ? "#8ba7c4" : "#6b7280", margin: "2px 0 0" }}>
+              <p style={{ fontSize: "12px", color: isDarkMode ? "#8ba7c4" : "#6b7280", margin: "2px 0 0" }}>
                 Fields marked <span style={{ color: "#ef4444" }}>*</span> are required
               </p>
             </div>
@@ -397,9 +430,9 @@ export default function AdminPublishNews() {
           />
           {errors.title && <p style={{ fontSize: "12px", color: "#ef4444", marginBottom: "20px" }}>{errors.title}</p>}
 
-          {/* Category + Date */}
-          <div style={{ display: "flex", gap: "20px", marginBottom: "24px", flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: "200px" }}>
+          {/* Category + Date — stacks on mobile */}
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: "20px", marginBottom: "24px" }}>
+            <div style={{ flex: 1, minWidth: isMobile ? "0" : "200px", width: "100%" }}>
               <label style={{ display: "block", marginBottom: "6px", fontWeight: 700, color: labelClr, fontSize: "13px" }}>
                 Category <span style={{ color: "#ef4444" }}>*</span>
               </label>
@@ -413,7 +446,7 @@ export default function AdminPublishNews() {
                 ))}
               </select>
             </div>
-            <div style={{ flex: 1, minWidth: "200px" }}>
+            <div style={{ flex: 1, minWidth: isMobile ? "0" : "200px", width: "100%" }}>
               <label style={{ display: "block", marginBottom: "6px", fontWeight: 700, color: labelClr, fontSize: "13px" }}>
                 Publish Date <span style={{ color: "#ef4444" }}>*</span>
               </label>
@@ -435,7 +468,7 @@ export default function AdminPublishNews() {
           </label>
           <textarea
             style={{
-              display: "block", width: "100%", minHeight: "160px",
+              display: "block", width: "100%", minHeight: isMobile ? "130px" : "160px",
               border: `1.5px solid ${inputBdr("content")}`,
               borderRadius: "8px", padding: "14px 16px", fontSize: "14px",
               color: inputClr, background: inputBg, resize: "vertical",
@@ -458,7 +491,7 @@ export default function AdminPublishNews() {
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             style={{
-              position: "relative", width: "100%", height: "180px",
+              position: "relative", width: "100%", height: isMobile ? "150px" : "180px",
               border: `2px dashed ${isDragging ? "#4CAF8A" : isDarkMode ? "#3a5a7a" : "#d1d5db"}`,
               borderRadius: "12px",
               background: isDragging
@@ -466,7 +499,7 @@ export default function AdminPublishNews() {
                 : (isDarkMode ? "#1A2F47" : "#f8fafc"),
               display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center",
-              cursor: "pointer", overflow: "hidden", marginBottom: "32px",
+              cursor: "pointer", overflow: "hidden", marginBottom: isMobile ? "20px" : "32px",
               transition: "border-color 0.2s, background 0.2s", boxSizing: "border-box",
             }}
           >
@@ -489,20 +522,23 @@ export default function AdminPublishNews() {
                     position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)",
                     display: "flex", flexDirection: "column",
                     alignItems: "center", justifyContent: "center", gap: "6px",
+                    padding: "0 16px",
                   }}
                 >
                   <span style={{ fontSize: "28px" }}>🖼️</span>
                   <p style={{ color: "#fff", fontWeight: 700, fontSize: "13px", maxWidth: "300px", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {coverImageName}
                   </p>
-                  <p style={{ color: "#d1fae5", fontSize: "11px" }}>Click to change</p>
+                  <p style={{ color: "#d1fae5", fontSize: "11px" }}>Tap to change</p>
                 </div>
               </>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", pointerEvents: "none" }}>
-                <div style={{ fontSize: "40px", opacity: 0.4 }}>🖼️</div>
-                <p style={{ fontSize: "14px", fontWeight: 600, color: isDarkMode ? "#8ba7c4" : "#4b5563" }}>
-                  Drag &amp; drop or <span style={{ color: "#4CAF8A" }}>browse</span> to upload
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", pointerEvents: "none", padding: "0 16px", textAlign: "center" }}>
+                <div style={{ fontSize: isMobile ? "32px" : "40px", opacity: 0.4 }}>🖼️</div>
+                <p style={{ fontSize: isMobile ? "13px" : "14px", fontWeight: 600, color: isDarkMode ? "#8ba7c4" : "#4b5563" }}>
+                  {isMobile ? "Tap to upload" : "Drag & drop or "}
+                  {!isMobile && <span style={{ color: "#4CAF8A" }}>browse</span>}
+                  {!isMobile && " to upload"}
                 </p>
                 <p style={{ fontSize: "12px", color: isDarkMode ? "#5a7a9a" : "#9ca3af" }}>PNG, JPG up to 5 MB</p>
               </div>
@@ -539,8 +575,15 @@ export default function AdminPublishNews() {
           {/* Separator */}
           <div style={{ height: "1px", background: isDarkMode ? "#243a52" : "#f0f4f8", marginBottom: "24px" }} />
 
-          {/* Actions */}
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+          {/* Actions — stack + full-width on mobile */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              gap: "12px",
+              alignItems: "stretch",
+            }}
+          >
             <button
               disabled={!canSubmit || submitting}
               onClick={handlePublish}
@@ -550,6 +593,7 @@ export default function AdminPublishNews() {
                 color: "#fff", fontWeight: 700, borderRadius: "8px",
                 cursor: canSubmit && !submitting ? "pointer" : "not-allowed",
                 border: "none", fontSize: "14px", transition: "background 0.2s",
+                width: isMobile ? "100%" : "auto",
               }}
             >
               {submitting ? (uploadProgress ? "Uploading…" : "Publishing…") : "Publish Now"}
@@ -565,6 +609,7 @@ export default function AdminPublishNews() {
                 color: isDarkMode ? "#e2eaf4" : "#1b3a5c",
                 fontWeight: 700, borderRadius: "8px",
                 cursor: submitting ? "not-allowed" : "pointer", fontSize: "14px",
+                width: isMobile ? "100%" : "auto",
               }}
             >
               Save Draft
@@ -580,6 +625,7 @@ export default function AdminPublishNews() {
                 color: canSubmit ? (isDarkMode ? "#e2eaf4" : "#1b3a5c") : "#9ca3af",
                 fontWeight: 700, borderRadius: "8px",
                 cursor: canSubmit ? "pointer" : "not-allowed", fontSize: "14px",
+                width: isMobile ? "100%" : "auto",
               }}
             >
               Preview
@@ -593,7 +639,9 @@ export default function AdminPublishNews() {
                 border: `1.5px solid ${isDarkMode ? "#3a5a7a" : "#d1d5db"}`,
                 color: isDarkMode ? "#8ba7c4" : "#6b7280",
                 fontWeight: 700, borderRadius: "8px",
-                cursor: "pointer", fontSize: "14px", marginLeft: "auto",
+                cursor: "pointer", fontSize: "14px",
+                width: isMobile ? "100%" : "auto",
+                marginLeft: isMobile ? "0" : "auto",
               }}
             >
               Cancel
@@ -604,15 +652,15 @@ export default function AdminPublishNews() {
         {/* ── Right: Published Articles Sidebar ─────────────────────────── */}
         <div
           style={{
-            width: "320px",
+            width: isMobile ? "100%" : "320px",
             flexShrink: 0,
             background: sidebarBg,
             borderRadius: "14px",
             boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
             overflow: "hidden",
-            position: "sticky",
+            position: isMobile ? "static" : "sticky",
             top: "24px",
-            maxHeight: "calc(100vh - 48px)",
+            maxHeight: isMobile ? "480px" : "calc(100vh - 48px)",
             display: "flex",
             flexDirection: "column",
           }}
@@ -634,6 +682,7 @@ export default function AdminPublishNews() {
                   width: "28px", height: "28px", borderRadius: "8px",
                   background: "linear-gradient(135deg, #122843, #1b3a5c)",
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px",
+                  flexShrink: 0,
                 }}
               >
                 📋
@@ -766,7 +815,7 @@ export default function AdminPublishNews() {
                       >
                         {article.title}
                       </p>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                         <span
                           style={{
                             background: catStyle.bg, color: catStyle.text,
@@ -797,27 +846,28 @@ export default function AdminPublishNews() {
             position: "fixed", inset: 0, zIndex: 50,
             background: "rgba(0,0,0,0.6)", overflowY: "auto",
             display: "flex", alignItems: "flex-start",
-            justifyContent: "center", padding: "32px 16px",
+            justifyContent: "center", padding: modalOuterPad,
+            boxSizing: "border-box",
           }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowPreview(false); }}
         >
           <div
             style={{
-              position: "relative", background: "#fff", borderRadius: "20px",
+              position: "relative", background: "#fff", borderRadius: isMobile ? "14px" : "20px",
               boxShadow: "0 25px 60px rgba(0,0,0,0.25)",
               width: "100%", maxWidth: "700px",
             }}
           >
             {coverPreview ? (
-              <div style={{ width: "100%", height: "280px", borderRadius: "20px 20px 0 0", overflow: "hidden" }}>
+              <div style={{ width: "100%", height: isMobile ? "180px" : "280px", borderRadius: isMobile ? "14px 14px 0 0" : "20px 20px 0 0", overflow: "hidden" }}>
                 <img src={coverPreview} alt="Cover" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </div>
             ) : (
               <div
                 style={{
-                  width: "100%", height: "140px",
+                  width: "100%", height: isMobile ? "100px" : "140px",
                   background: "linear-gradient(135deg, #122843, #1b3a5c)",
-                  borderRadius: "20px 20px 0 0",
+                  borderRadius: isMobile ? "14px 14px 0 0" : "20px 20px 0 0",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
@@ -840,7 +890,7 @@ export default function AdminPublishNews() {
               ✕
             </button>
 
-            <div style={{ padding: "28px 36px 40px" }}>
+            <div style={{ padding: modalPadding }}>
               <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
                 <span
                   style={{
@@ -861,7 +911,7 @@ export default function AdminPublishNews() {
                 )}
               </div>
 
-              <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#1b3a5c", marginBottom: "16px", lineHeight: "1.3" }}>
+              <h1 style={{ fontSize: isMobile ? "19px" : "24px", fontWeight: 800, color: "#1b3a5c", marginBottom: "16px", lineHeight: "1.3" }}>
                 {title || "(No title entered)"}
               </h1>
               <div style={{ height: "3px", width: "52px", background: "#4CAF8A", borderRadius: "2px", marginBottom: "18px" }} />
@@ -882,7 +932,8 @@ export default function AdminPublishNews() {
             backdropFilter: "blur(6px)",
             WebkitBackdropFilter: "blur(6px)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: "32px 16px",
+            padding: modalOuterPad,
+            boxSizing: "border-box",
           }}
           onClick={(e) => { if (e.target === e.currentTarget) setSelectedArticle(null); }}
         >
@@ -897,7 +948,7 @@ export default function AdminPublishNews() {
             style={{
               position: "relative",
               background: isDarkMode ? "#14263A" : "#fff",
-              borderRadius: "20px",
+              borderRadius: isMobile ? "14px" : "20px",
               boxShadow: "0 32px 80px rgba(0,0,0,0.4)",
               width: "100%",
               maxWidth: "660px",
@@ -908,7 +959,7 @@ export default function AdminPublishNews() {
           >
             {/* Cover image or gradient header */}
             {buildImageUrl(selectedArticle.image) ? (
-              <div style={{ width: "100%", height: "240px", borderRadius: "20px 20px 0 0", overflow: "hidden", flexShrink: 0 }}>
+              <div style={{ width: "100%", height: isMobile ? "160px" : "240px", borderRadius: isMobile ? "14px 14px 0 0" : "20px 20px 0 0", overflow: "hidden", flexShrink: 0 }}>
                 <Image
                   src={buildImageUrl(selectedArticle.image)!}
                   alt={selectedArticle.title}
@@ -921,9 +972,9 @@ export default function AdminPublishNews() {
             ) : (
               <div
                 style={{
-                  width: "100%", height: "130px", flexShrink: 0,
+                  width: "100%", height: isMobile ? "90px" : "130px", flexShrink: 0,
                   background: "linear-gradient(135deg, #122843 0%, #1b3a5c 60%, #4CAF8A22 100%)",
-                  borderRadius: "20px 20px 0 0",
+                  borderRadius: isMobile ? "14px 14px 0 0" : "20px 20px 0 0",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
@@ -958,7 +1009,7 @@ export default function AdminPublishNews() {
             </button>
 
             {/* Content */}
-            <div style={{ padding: "28px 36px 40px" }}>
+            <div style={{ padding: modalPadding }}>
               {/* Category badge + date */}
               <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "14px" }}>
                 {(() => {
@@ -984,7 +1035,7 @@ export default function AdminPublishNews() {
               {/* Title */}
               <h2
                 style={{
-                  fontSize: "22px", fontWeight: 800,
+                  fontSize: isMobile ? "18px" : "22px", fontWeight: 800,
                   color: isDarkMode ? "#f0f6ff" : "#1b3a5c",
                   margin: "0 0 14px", lineHeight: "1.35",
                 }}

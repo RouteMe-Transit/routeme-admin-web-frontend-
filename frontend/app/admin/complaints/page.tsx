@@ -166,7 +166,7 @@ export default function AdminComplaints() {
   const filteredComplaints = complaints; // server-side search/filters applied
 
   return (
-    <div className="min-h-screen bg-[#f5f7fa] p-6">
+    <div className="min-h-screen bg-[#f5f7fa] p-4 md:p-6">
       {error && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
           {error}
@@ -211,7 +211,7 @@ export default function AdminComplaints() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-10 cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
+          className="h-10 w-full sm:w-auto cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
         >
           <option value="All">All Status</option>
           <option value="Pending">Pending</option>
@@ -221,7 +221,7 @@ export default function AdminComplaints() {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="h-10 cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
+          className="h-10 w-full sm:w-auto cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
         >
           <option value="All">All Category</option>
           <option value="Punctuality">Punctuality</option>
@@ -230,86 +230,144 @@ export default function AdminComplaints() {
         </select>
       </div>
 
-      {/* TABLE */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <div className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
-            <div>ID</div>
-            <div>Passenger</div>
-            <div>Category</div>
-            <div>Bus</div>
-            <div>Message</div>
-            <div>Date</div>
-            <div>Status</div>
-            <div className="text-center">Actions</div>
+      {isLoading ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm font-semibold text-gray-500 shadow-sm">
+          Loading complaints...
+        </div>
+      ) : filteredComplaints.length === 0 ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm font-semibold text-gray-400 shadow-sm">
+          No complaints found.
+        </div>
+      ) : (
+        <>
+          {/* ── MOBILE: stacked cards (below md) ───────────────────────────── */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {filteredComplaints.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
+              >
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[11px] font-bold tracking-wider text-gray-400">
+                      {item.displayId ?? item.id}
+                    </p>
+                    <p className="truncate font-semibold text-gray-800">{item.passenger}</p>
+                  </div>
+                  <span
+                    className={`shrink-0 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                      item.status === "Resolved"
+                        ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                        : "border-amber-300 bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+                </div>
+
+                <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                  <span><b className="text-gray-500">Category:</b> {item.category || "—"}</span>
+                  <span><b className="text-gray-500">Bus:</b> {item.bus || "—"}</span>
+                  <span className="font-mono"><b className="text-gray-500 font-sans">Date:</b> {item.date}</span>
+                </div>
+
+                <p className="mb-3 line-clamp-2 text-sm text-gray-700">{item.message}</p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedComplaint(item)}
+                    className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-semibold shadow-sm transition hover:bg-blue-100"
+                  >
+                    <IoEye className="h-4 w-4" />
+                    View
+                  </button>
+                  <button
+                    onClick={() => toggleStatus(item.id)}
+                    className={`h-9 flex-1 rounded-lg text-xs font-semibold text-white shadow-sm transition ${
+                      item.status === "Pending"
+                        ? "bg-emerald-500 hover:bg-emerald-600"
+                        : "bg-amber-500 hover:bg-amber-600"
+                    }`}
+                  >
+                    {item.status === "Pending" ? "Mark Resolved" : "Mark Pending"}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
-          <div>
-            {isLoading ? (
-              <div className="p-8 text-center text-sm font-semibold text-gray-500">
-                Loading complaints...
+          {/* ── DESKTOP: table (md and up) ─────────────────────────────────── */}
+          <div className="hidden overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm md:block">
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+                <div>ID</div>
+                <div>Passenger</div>
+                <div>Category</div>
+                <div>Bus</div>
+                <div>Message</div>
+                <div>Date</div>
+                <div>Status</div>
+                <div className="text-center">Actions</div>
               </div>
-            ) : filteredComplaints.length === 0 ? (
-              <div className="p-8 text-center text-sm font-semibold text-gray-400">
-                No complaints found.
+
+              <div>
+                {filteredComplaints.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] items-center border-b px-5 py-3.5 text-sm transition-colors hover:bg-blue-50/30"
+                  >
+                    <div className="font-mono text-xs font-bold tracking-wider text-gray-400">
+                      {item.displayId ?? item.id}
+                    </div>
+                    <div className="min-w-0 font-semibold text-gray-800 truncate pr-2">
+                      {item.passenger}
+                    </div>
+                    <div className="text-gray-700">{item.category}</div>
+                    <div className="text-gray-700">{item.bus}</div>
+                    <div className="min-w-0 pr-2 truncate text-gray-700">{item.message}</div>
+                    <div className="font-mono text-xs text-gray-500">{item.date}</div>
+                    <div>
+                      <span
+                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                          item.status === "Resolved"
+                            ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                            : "border-amber-300 bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => setSelectedComplaint(item)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm transition hover:bg-blue-100"
+                        title="View complaint"
+                      >
+                        <IoEye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => toggleStatus(item.id)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition ${
+                          item.status === "Pending"
+                            ? "bg-emerald-500 hover:bg-emerald-600"
+                            : "bg-amber-500 hover:bg-amber-600"
+                        }`}
+                      >
+                        {item.status === "Pending" ? "Mark Resolved" : "Mark Pending"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ) : (
-              filteredComplaints.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-[110px_1.3fr_1fr_1fr_1.6fr_120px_120px_140px] items-center border-b px-5 py-3.5 text-sm transition-colors hover:bg-blue-50/30"
-                >
-                  <div className="font-mono text-xs font-bold tracking-wider text-gray-400">
-                    {item.displayId ?? item.id}
-                  </div>
-                  <div className="min-w-0 font-semibold text-gray-800 truncate pr-2">
-                    {item.passenger}
-                  </div>
-                  <div className="text-gray-700">{item.category}</div>
-                  <div className="text-gray-700">{item.bus}</div>
-                  <div className="min-w-0 pr-2 truncate text-gray-700">{item.message}</div>
-                  <div className="font-mono text-xs text-gray-500">{item.date}</div>
-                  <div>
-                    <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
-                        item.status === "Resolved"
-                          ? "border-emerald-300 bg-emerald-100 text-emerald-700"
-                          : "border-amber-300 bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => setSelectedComplaint(item)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm transition hover:bg-blue-100"
-                      title="View complaint"
-                    >
-                      <IoEye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => toggleStatus(item.id)}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition ${
-                        item.status === "Pending"
-                          ? "bg-emerald-500 hover:bg-emerald-600"
-                          : "bg-amber-500 hover:bg-amber-600"
-                      }`}
-                    >
-                      {item.status === "Pending" ? "Mark Resolved" : "Mark Pending"}
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* MODAL */}
       {selectedComplaint && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-lg mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 md:p-6 shadow-lg">
             <h2 className="mb-4 text-lg font-bold">Complaint Details</h2>
             <p className="mb-1">
               <b>ID:</b> {selectedComplaint.displayId ?? selectedComplaint.id}
