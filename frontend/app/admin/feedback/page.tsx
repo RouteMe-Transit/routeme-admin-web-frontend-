@@ -137,7 +137,7 @@ export default function AdminFeedback() {
   const renderStars = (count: number) => "★".repeat(count);
 
   return (
-    <div className="min-h-screen bg-[#f5f7fa] p-6">
+    <div className="min-h-screen bg-[#f5f7fa] p-4 md:p-6">
       {error && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
           {error}
@@ -173,7 +173,7 @@ export default function AdminFeedback() {
         </div>
 
         <select
-          className="h-10 cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
+          className="h-10 w-full sm:w-auto cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
           value={starFilter}
           onChange={(e) =>
             setStarFilter(e.target.value === "all" ? "all" : Number(e.target.value))
@@ -188,7 +188,7 @@ export default function AdminFeedback() {
         </select>
 
         <select
-          className="h-10 cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
+          className="h-10 w-full sm:w-auto cursor-pointer rounded-lg border border-[#828282]/40 bg-white px-3 text-sm shadow-sm"
           value={timeFilter}
           onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
         >
@@ -198,61 +198,113 @@ export default function AdminFeedback() {
         </select>
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="responsive-table">
-          <div className="grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
-            <div>ID</div>
-            <div>Name</div>
-            <div>Category</div>
-            <div>Bus</div>
-            <div>Comment</div>
-            <div>Rating</div>
-            <div>Date</div>
-            <div className="text-center">Action</div>
-          </div>
-
-          {isLoading ? (
-            <div className="p-8 text-center text-sm font-semibold text-gray-500">Loading feedbacks...</div>
-          ) : (
-            filteredFeedbacks.map((fb) => (
+      {isLoading ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm font-semibold text-gray-500 shadow-sm">
+          Loading feedbacks...
+        </div>
+      ) : filteredFeedbacks.length === 0 ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm font-semibold text-gray-400 shadow-sm">
+          No feedback found.
+        </div>
+      ) : (
+        <>
+          {/* ── MOBILE: stacked cards (below md) ───────────────────────────── */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {filteredFeedbacks.map((fb) => (
               <div
                 key={fb.id}
-                className="grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] items-center border-b px-5 py-3.5 text-sm transition-colors hover:bg-blue-50/30"
+                className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
               >
-                <div className="font-mono text-xs font-bold tracking-wider text-gray-400 whitespace-nowrap">{fb.displayId ?? fb.id}</div>
-
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-                    {fb.name.charAt(0)}
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+                      {fb.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-mono text-[11px] font-bold tracking-wider text-gray-400">
+                        {fb.displayId ?? fb.id}
+                      </p>
+                      <p className="truncate font-semibold text-gray-800">{fb.name}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 truncate font-semibold text-gray-800">{fb.name}</div>
+                  <span className="shrink-0 whitespace-nowrap text-amber-500 text-sm">
+                    {renderStars(fb.stars)}
+                  </span>
                 </div>
 
-                <div className="min-w-0 truncate text-gray-700">{fb.category}</div>
-                <div className="min-w-0 truncate text-gray-700">{fb.bus}</div>
-                <div className="min-w-0 truncate text-gray-600 text-sm">{fb.comment}</div>
-                <div className="whitespace-nowrap text-amber-500 text-sm">{renderStars(fb.stars)}</div>
-                <div className="font-mono text-xs text-gray-500 whitespace-nowrap">{fb.date}</div>
-
-                <div className="flex items-center justify-center">
-                  <button
-                    onClick={() => setSelectedFeedback(fb)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm transition hover:bg-blue-100"
-                    title="View feedback"
-                  >
-                    <IoEye className="h-4 w-4" />
-                  </button>
+                <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                  <span><b className="text-gray-500">Category:</b> {fb.category || "—"}</span>
+                  <span><b className="text-gray-500">Bus:</b> {fb.bus || "—"}</span>
+                  <span className="font-mono"><b className="text-gray-500 font-sans">Date:</b> {fb.date}</span>
                 </div>
+
+                <p className="mb-3 line-clamp-2 text-sm text-gray-700">{fb.comment}</p>
+
+                <button
+                  onClick={() => setSelectedFeedback(fb)}
+                  className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-semibold shadow-sm transition hover:bg-blue-100"
+                >
+                  <IoEye className="h-4 w-4" />
+                  View Feedback
+                </button>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            ))}
+          </div>
+
+          {/* ── DESKTOP: table (md and up) ─────────────────────────────────── */}
+          <div className="hidden rounded-2xl border border-gray-100 bg-white shadow-sm md:block">
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] border-b bg-[#f8fafc] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+                <div>ID</div>
+                <div>Name</div>
+                <div>Category</div>
+                <div>Bus</div>
+                <div>Comment</div>
+                <div>Rating</div>
+                <div>Date</div>
+                <div className="text-center">Action</div>
+              </div>
+
+              {filteredFeedbacks.map((fb) => (
+                <div
+                  key={fb.id}
+                  className="grid grid-cols-[70px_1.5fr_1fr_1fr_2fr_70px_80px_60px] items-center border-b px-5 py-3.5 text-sm transition-colors hover:bg-blue-50/30"
+                >
+                  <div className="font-mono text-xs font-bold tracking-wider text-gray-400 whitespace-nowrap">{fb.displayId ?? fb.id}</div>
+
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+                      {fb.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 truncate font-semibold text-gray-800">{fb.name}</div>
+                  </div>
+
+                  <div className="min-w-0 truncate text-gray-700">{fb.category}</div>
+                  <div className="min-w-0 truncate text-gray-700">{fb.bus}</div>
+                  <div className="min-w-0 truncate text-gray-600 text-sm">{fb.comment}</div>
+                  <div className="whitespace-nowrap text-amber-500 text-sm">{renderStars(fb.stars)}</div>
+                  <div className="font-mono text-xs text-gray-500 whitespace-nowrap">{fb.date}</div>
+
+                  <div className="flex items-center justify-center">
+                    <button
+                      onClick={() => setSelectedFeedback(fb)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm transition hover:bg-blue-100"
+                      title="View feedback"
+                    >
+                      <IoEye className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* MODAL */}
       {selectedFeedback && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 md:p-6 shadow-lg">
             <h2 className="mb-4 text-lg font-bold">Feedback Details</h2>
 
             <p><b>ID:</b> {selectedFeedback.displayId ?? selectedFeedback.id}</p>

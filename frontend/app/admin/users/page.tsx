@@ -153,6 +153,14 @@ const emptyForm = (): FormValues => ({
   password: "",
 });
 
+// ─── Sort helper ──────────────────────────────────────────────────────────────
+// Matches the Manage Buses page pattern: newest / highest-ID first.
+// Client-side sort so ordering is consistent regardless of what the
+// backend returns (the /users endpoint isn't guaranteed pre-sorted).
+function sortUsersDescById(list: User[]): User[] {
+  return [...list].sort((a, b) => b.id - a.id);
+}
+
 // ─── Parse ID search ──────────────────────────────────────────────────────────
 // If the user types "ADM0002", "PAS0001", or just "0002" / "2",
 // extract the numeric part so we can send it as ?id= to the backend.
@@ -339,7 +347,9 @@ export default function AdminManageUsers() {
           `/users?${params.toString()}`,
           { signal: opts?.signal }
         );
-        setUsers(res.users ?? []);
+
+        // ── Sort — same descending-ID pattern used on the Manage Buses page ──
+        setUsers(sortUsersDescById(res.users ?? []));
         setTotalUsers(res.total ?? 0);
         setTotalPages(res.totalPages ?? 1);
       } catch (err) {
