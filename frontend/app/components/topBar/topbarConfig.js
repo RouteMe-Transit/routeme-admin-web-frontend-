@@ -1,0 +1,27 @@
+export const topbarConfig = {
+  "/admin/dashboard": { title: "Dashboard", icon: <img src="/icons/dashboard.png" alt="Dashboard" className="w-10 h-10" /> },
+  "/admin/fleetMonitor": { title: "Fleet Monitor", icon: <img src="/icons/map.png" alt="Fleet Monitor" className="w-10 h-10" /> },
+  "/admin/manageRoutes": { title: "Manage Routes", icon: <img src="/icons/manageRoutes.png" alt="Manage Routes" className="w-10 h-10" /> },
+  "/admin/manageBuses": { title: "Manage Buses", icon: <img src="/icons/bus.png" alt="Manage Buses" className="w-10 h-10" /> },
+  "/admin/manageStops": { title: "Manage Stops", icon: <img src="/icons/bus-stops.png" alt="Manage Stops" className="w-10 h-10" /> },
+  "/admin/publishNews": { title: "News", icon: <img src="/icons/newspaper.png" alt="Publish News" className="w-10 h-10" /> },
+  "/admin/alerts": { title: "Alerts", icon: <img src="/icons/alarm.png" alt="Alerts" className="w-8 h-8" /> },
+  "/admin/users": { title: "Users", icon: <img src="/icons/users.png" alt="Users" className="w-10 h-10" /> },
+  "/admin/reports": { title: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="w-10 h-10" /> },
+  "/admin/complaints": { title: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaints" className="w-10 h-10" /> },
+  "/admin/feedback": { title: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="w-10 h-10" /> },
+  "/admin/tripSchedule": { title: "Manage Trips", icon: <img src="/icons/trip.png" alt="Manage Trips" className="w-10 h-10" /> },
+
+  "/bus/trip": { title: "Trip", icon: <img src="/icons/trip.png" alt="Trip" className="w-10 h-10" /> },
+  "/bus/alerts": { title: "Send Alerts", icon: <img src="/icons/alarm.png" alt="Send Alerts" className="w-10 h-10" /> },
+  "/bus/reports": { title: "Reports", icon: <img src="/icons/reports.png" alt="Reports" className="w-10 h-10" /> },
+  "/bus/profile": { title: "Profile", icon: <img src="/icons/bus.png" alt="Profile" className="w-10 h-10" /> },
+
+  "/passenger/liveTracking": { title: "Live Tracking", icon: <img src="/icons/liveTracking.png" alt="Live Tracking" className="w-10 h-10" /> },
+  "/passenger/routeFinder": { title: "Route Finder", icon: <img src="/icons/map.png" alt="Route Finder" className="w-10 h-10" /> },
+  "/passenger/newsFeed": { title: "News Feed", icon: <img src="/icons/newspaper.png" alt="News Feed" className="w-10 h-10" /> },
+  "/passenger/alerts": { title: "Alerts", icon: <img src="/icons/alarm.png" alt="Alerts" className="w-8 h-8" /> },
+  "/passenger/lost&found": { title: "Lost & Found", icon: <img src="/icons/lostFound.png" alt="Lost & Found" className="w-10 h-10" /> },
+  "/passenger/feedback": { title: "Feedback", icon: <img src="/icons/feedback.png" alt="Feedback" className="w-10 h-10" /> },
+  "/passenger/complaint": { title: "Complaints", icon: <img src="/icons/complaint.png" alt="Complaint" className="w-10 h-10" /> },
+};
