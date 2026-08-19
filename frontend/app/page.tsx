@@ -1,64 +1,179 @@
-import Image from "next/image";
+'use client';
+//landing page
+import Navbar from "@/app/components/navBar/NavbarData";
+import { FaCircle, FaPhone } from "react-icons/fa";
+import { FaLocationDot } from "react-icons/fa6";
+import Link from "next/link";
+import LogoNname from "./components/logoNname/logoNname";
+import { useEffect } from "react";
 
 export default function Home() {
+  useEffect(() => {
+    const rawUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
+    const cleanUrl = rawUrl.replace(/\/+$/, "");
+    const API_URL = cleanUrl.endsWith("/api/v1") ? cleanUrl : `${cleanUrl}/api/v1`;
+
+    fetch(`${API_URL}/test`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Server error");
+        return res.json();
+      })
+      .then((data) => {
+        if (data.success) {
+          alert("✅ Backend Connected Successfully!");
+        } else {
+          alert("⚠️ Unexpected response");
+        }
+      })
+      .catch((err) => {
+        console.error("Connection error:", err);
+        alert("❌ Backend NOT Connected! Please check if the backend service is running.");
+      });
+  }, []);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className="min-h-screen w-full bg-white text-slate-900">
+      <main className="w-full">
+        <Navbar />
+
+        <section className="overflow-hidden bg-[#183555] py-16">
+          <div className="page-container">
+            <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#50B18D]/30 bg-[#50B18D]/15 px-4 py-2 text-sm font-semibold text-green-100 shadow-sm">
+                  <FaCircle className="text-green-400 animate-pulse" />
+                  <span>Live Tracking Active</span>
+                </div>
+                <h1 className="mt-8 text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+                  Find Your Bus.<br />Never wait <span className="text-[#50B18D]">Guessing</span> Again.
+                </h1>
+                <p className="mt-6 text-base leading-8 text-slate-200 sm:text-lg">
+                  Real-time GPS bus tracking for Sri Lanka. Know exactly when your bus arrives, plan smarter routes, and stay informed with instant alerts.
+                </p>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Link
+                    href="/find-bus"
+                    className="inline-flex w-full justify-center rounded-[10px] bg-[#50B18D] px-6 py-4 text-sm font-bold text-white shadow-lg transition hover:bg-[#3fa76b] sm:w-auto"
+                  >
+                    Find Your Bus
+                  </Link>
+                  <Link
+                    href="/find-bus"
+                    className="inline-flex w-full justify-center rounded-[10px] border border-white/20 bg-[#183555]/90 px-6 py-4 text-sm font-bold text-white transition hover:bg-[#1e415f] sm:w-auto"
+                  >
+                    Watch Demo
+                  </Link>
+                </div>
+                <div className="mt-10 grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-3xl bg-white/10 px-6 py-6 text-center text-white shadow-lg ring-1 ring-white/10">
+                    <p className="text-4xl font-bold">247</p>
+                    <p className="mt-2 text-sm text-slate-200">Active Buses</p>
+                  </div>
+                  <div className="rounded-3xl bg-white/10 px-6 py-6 text-center text-white shadow-lg ring-1 ring-white/10">
+                    <p className="text-4xl font-bold">18</p>
+                    <p className="mt-2 text-sm text-slate-200">Routes Covered</p>
+                  </div>
+                  <div className="rounded-3xl bg-white/10 px-6 py-6 text-center text-white shadow-lg ring-1 ring-white/10">
+                    <p className="text-4xl font-bold">94%</p>
+                    <p className="mt-2 text-sm text-slate-200">On-Time Rate</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-3xl bg-white p-6 shadow-lg">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F8F1] text-[#17A15C]">
+                    <img src="/icons/gps.png" alt="GPS" className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-900">Live GPS Tracking</h2>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">
+                    See every bus location updated every 10 seconds and reduce uncertainty during your commute.
+                  </p>
+                </div>
+                <div className="rounded-3xl bg-white p-6 shadow-lg">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF7FF] text-[#117CBF]">
+                    <img src="/icons/fxemoji_bell.svg" alt="Alerts" className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-900">Smart Alerts</h2>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">
+                    Receive instant notifications for delays, cancellations, and route changes so you can plan ahead.
+                  </p>
+                </div>
+                <div className="rounded-3xl bg-white p-6 shadow-lg">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F0F7FF] text-[#1C5AA4]">
+                    <img src="/icons/map1.svg" alt="Route" className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-900">Route Planner</h2>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">
+                    Find the best route from any stop to your destination with intuitive route guidance and arrival predictions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+          <section className="bg-slate-50 py-12">
+            <div className="page-container">
+              <div className="grid gap-6 md:grid-cols-3">
+                <div className="rounded-3xl bg-white p-6 shadow-sm border border-slate-200">
+                  <h3 className="text-xl font-semibold text-slate-900">Real-time bus location</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">Track every bus on the map and get accurate arrival times for nearby stops.</p>
+                </div>
+                <div className="rounded-3xl bg-white p-6 shadow-sm border border-slate-200">
+                  <h3 className="text-xl font-semibold text-slate-900">Alerts & updates</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">Stay notified when delays or route changes happen so you can adjust instantly.</p>
+                </div>
+                <div className="rounded-3xl bg-white p-6 shadow-sm border border-slate-200">
+                  <h3 className="text-xl font-semibold text-slate-900">Easy route planning</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">Search stops, compare routes, and choose the fastest path to your destination.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <footer className="bg-[#183555] py-10 text-white">
+            <div className="page-container">
+                <div className="grid gap-10 lg:grid-cols-3">
+                <div>
+                  <LogoNname />
+                  <p className="mt-4 max-w-md text-sm text-slate-300">
+                    Real-time GPS bus tracking built for Sri Lanka. Get there smarter, faster, and without the guesswork.
+                  </p>
+                </div>
+              <div className="grid gap-3">
+                <p className="text-sm font-semibold uppercase text-slate-300">Navigate</p>
+                <Link href="/" className="text-sm text-slate-100 hover:text-[#50B18D]">Home</Link>
+                <Link href="/find-bus" className="text-sm text-slate-100 hover:text-[#50B18D]">Live Tracking</Link>
+                <Link href="/routes" className="text-sm text-slate-100 hover:text-[#50B18D]">Routes</Link>
+                <Link href="/news" className="text-sm text-slate-100 hover:text-[#50B18D]">News</Link>
+                <Link href="/contact" className="text-sm text-slate-100 hover:text-[#50B18D]">Contact</Link>
+              </div>
+              <div className="grid gap-3">
+                <p className="text-sm font-semibold uppercase text-slate-300">Contact Us</p>
+                <div className="flex items-center gap-2 text-sm text-slate-200">
+                  <FaLocationDot className="text-[#50B18D]" />
+                  <span>Email: info@routeme.lk</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-200">
+                  <FaPhone className="text-[#50B18D]" />
+                  <span>Phone: +94 123 456 789</span>
+                </div>
+                <div className="flex items-start gap-2 text-sm text-slate-200">
+                  <FaLocationDot className="mt-1 text-[#50B18D]" />
+                  <span>Address: 123 Main Street, Colombo, Sri Lanka</span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+              <p>© 2026 RouteMe. All rights reserved.</p>
+              <div className="flex flex-wrap gap-4">
+                <Link href="/privacy" className="hover:text-[#50B18D]">Privacy Policy</Link>
+                <Link href="/terms" className="hover:text-[#50B18D]">Terms of Service</Link>
+              </div>
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
   );
